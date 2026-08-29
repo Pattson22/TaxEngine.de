@@ -16,6 +16,12 @@ TaxEngine.de/
 ├── docs/
 │   ├── ELSTER_ERIC_INTEGRATION.md  Government submission architecture + implementation status
 │   └── TAXFIX_GAP_ANALYSIS.md      Competitive gap analysis + roadmap
+├── frontend/                        Next.js + TypeScript + Tailwind (see frontend/README.md)
+│   └── src/
+│       ├── lib/                      Typed API client, auth context, money formatting
+│       ├── components/               Shared UI (Button/Input/Card/Nav/...)
+│       └── app/                      Landing, auth, dashboard, filings/[id]/* (income,
+│                                     deductions, calculate, pay, submit)
 └── backend/
     ├── requirements.txt
     ├── pytest.ini
@@ -24,7 +30,7 @@ TaxEngine.de/
     │   ├── env.py                   Wired to app.config.settings + app.models.Base
     │   └── versions/                One migration per schema change, in order
     ├── .env.example                 Copy to .env for local development
-    ├── tests/                       212 unit tests, 100% line coverage of tax_engine
+    ├── tests/                       215 unit tests, 100% line coverage of tax_engine
     └── app/
         ├── main.py                  FastAPI app entrypoint (uvicorn app.main:app)
         ├── config.py                 Settings (env-driven, see .env.example)
@@ -91,6 +97,13 @@ alembic upgrade head
 # 4. Run the API
 uvicorn app.main:app --reload
 # -> interactive API docs at http://localhost:8000/docs
+
+# 5. Frontend (separate terminal)
+cd ../frontend
+npm install
+cp .env.local.example .env.local   # NEXT_PUBLIC_API_URL should point at the backend above
+npm run dev
+# -> http://localhost:3000 (see frontend/README.md for what's built/not built)
 ```
 
 ### Migrations
@@ -187,7 +200,7 @@ These are non-negotiable across the codebase:
 
 ## Verification
 
-- `backend/tests/` — 212 pytest unit tests, 100% line coverage of
+- `backend/tests/` — 215 pytest unit tests, 100% line coverage of
   `tax_engine`, run with `python -m pytest`.
 - Every feature above was additionally smoke-tested end-to-end against a
   real, throwaway Dockerized Postgres instance through the actual HTTP
@@ -211,9 +224,19 @@ Handwerkerleistungen credit, real Stripe payment integration, and an ERiC
 submission scaffold (blocked only on an actual BZSt developer
 certificate — see `docs/ELSTER_ERIC_INTEGRATION.md`).
 
+Frontend (`frontend/`) covers the golden path — register, dashboard, add
+wage income, add a deduction, calculate, view the refund breakdown, pay via
+Stripe Elements, submit — but is not a guided interview-style flow, and has
+no form for capital gains/rental/self-employment income or the
+Kinderfreibetrag inputs (those backend routes exist and work, just
+unreached from the UI yet). The register → calculate → view-results path
+was click-tested in a real browser, not just built; see
+`frontend/README.md` for exactly what that run covered and the real bug
+(an unhandled Stripe error losing its CORS headers) it caught and fixed.
+
 Not yet implemented: capital-gains Günstigerprüfung (§32d Abs. 6 EStG
 election to use the progressive tariff instead of Abgeltungsteuer),
 Kinderfreibetrag as first-class child entities (currently a plain count,
 see `kinderfreibetrag.py`'s docstring), AfA depreciation schedules for
 rental income, Gewerbesteuer for self-employment, a real `NativeEricClient`,
-and the frontend.
+frontend forms for the remaining income types, and automated frontend tests.

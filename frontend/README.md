@@ -67,11 +67,20 @@ src/
   silently.
 - **No automated frontend tests yet** (no Jest/Playwright/Vitest set up).
   Verification performed instead: `npm run build` (clean), `npm run lint`
-  (clean), `tsc --noEmit` (clean), and the exact API call sequence each
-  page makes was replayed via curl against the real running backend to
-  confirm the request/response shapes match — see the session history for
-  the full golden-path trace. **Live browser-driven UI interaction was NOT
-  performed** (no connected browser automation in that environment) — the
-  actual click-through experience (form validation UX, Stripe Elements
-  rendering, navigation transitions) has not been visually verified and
-  should be checked manually before shipping.
+  (clean), `tsc --noEmit` (clean), plus a real click-through in an actual
+  Chrome browser (register → dashboard → create filing → add wage income →
+  add a commute deduction → calculate → view the refund breakdown, with
+  every number cross-checked against the backend's own arithmetic). That
+  browser run caught a real bug: an unhandled Stripe API error (e.g. an
+  invalid key) reached FastAPI as a bare 500 with no CORS headers
+  (Starlette's `ServerErrorMiddleware` generates that response outside the
+  path `CORSMiddleware` hooks into), so the browser reported an opaque
+  "Failed to fetch" instead of a real error — fixed in
+  `backend/app/services/payment_service.py` by explicitly catching
+  `stripe.StripeError`, with a regression test. **Not yet exercised in a
+  browser**: actual Stripe Elements card entry/confirmation (no real test
+  keys in that environment — the payment page's error path was verified
+  instead), the `/submit` (ELSTER) page, and the deduction categories
+  beyond COMMUTE (home office/donations/childcare/Handwerkerleistungen
+  render the right dynamic fields per the code, but weren't individually
+  clicked through).

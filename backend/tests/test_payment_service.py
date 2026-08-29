@@ -20,9 +20,10 @@ import hashlib
 import hmac
 import json
 import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
+import stripe
 
 from app.config import settings
 from app.models.enums import FilingStatus
@@ -61,6 +62,51 @@ class TestCreatePaymentIntentGuardRail:
         filing = TaxFiling(status=FilingStatus.SUBMITTED, processing_fee_cents=3490)
         with pytest.raises(PaymentError):
             create_payment_intent_for_filing(filing)
+
+
+class TestCreatePaymentIntentStripeErrorHandling:
+    """Regression test: a real (invalid Stripe key) run against a live
+    browser surfaced this exact failure mode -- an unhandled
+    stripe.StripeError reached FastAPI as a bare 500 with no CORS headers
+    (Starlette's ServerErrorMiddleware generates that response outside the
+    path CORSMiddleware hooks into), so the browser reported an opaque
+    "Failed to fetch" with the real error completely invisible. This must
+    never reach the caller as anything other than PaymentError."""
+
+    def test_stripe_authentication_error_is_wrapped_as_payment_error(self):
+        filing = TaxFiling(status=FilingStatus.CALCULATED, processing_fee_cents=3490)
+
+        with patch(
+            "stripe.PaymentIntent.create",
+            side_effect=stripe.AuthenticationError("Invalid API Key provided"),
+        ):
+            with pytest.raises(PaymentError):
+                create_payment_intent_for_filing(filing)
+
+    def test_stripe_api_connection_error_is_wrapped_as_payment_error(self):
+        filing = TaxFiling(status=FilingStatus.CALCULATED, processing_fee_cents=3490)
+
+        with patch(
+            "stripe.PaymentIntent.create",
+            side_effect=stripe.APIConnectionError("Could not connect to Stripe"),
+        ):
+            with pytest.raises(PaymentError):
+                create_payment_intent_for_filing(filing)
+
+    def test_stripe_error_does_not_set_payment_provider_ref(self):
+        # If PaymentError is raised, the filing must NOT look like it has
+        # a live PaymentIntent -- otherwise a later webhook lookup could
+        # be confused by a ref that was never actually created.
+        filing = TaxFiling(status=FilingStatus.CALCULATED, processing_fee_cents=3490)
+
+        with patch(
+            "stripe.PaymentIntent.create",
+            side_effect=stripe.AuthenticationError("Invalid API Key provided"),
+        ):
+            with pytest.raises(PaymentError):
+                create_payment_intent_for_filing(filing)
+
+        assert filing.payment_provider_ref is None
 
 
 class TestWebhookSignatureVerification:

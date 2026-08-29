@@ -59,16 +59,38 @@ def create_payment_intent_for_filing(filing: TaxFiling) -> stripe.PaymentIntent:
             f"(current status: {filing.status.value})."
         )
 
-    intent = stripe.PaymentIntent.create(
-        amount=filing.processing_fee_cents,
-        currency="eur",
-        metadata={"filing_id": str(filing.id), "user_id": str(filing.user_id)},
-        # Card-only for the MVP. Stripe's automatic_payment_methods would
-        # also surface SEPA/Giropay/etc for a German market -- a
-        # reasonable next step, left explicit here rather than silently
-        # enabling every method a Stripe dashboard might have configured.
-        payment_method_types=["card"],
-    )
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=filing.processing_fee_cents,
+            currency="eur",
+            metadata={"filing_id": str(filing.id), "user_id": str(filing.user_id)},
+            # Card-only for the MVP. Stripe's automatic_payment_methods would
+            # also surface SEPA/Giropay/etc for a German market -- a
+            # reasonable next step, left explicit here rather than silently
+            # enabling every method a Stripe dashboard might have configured.
+            payment_method_types=["card"],
+        )
+    except stripe.StripeError as exc:
+        # Card-specific declines can't happen here (no card is attached
+        # yet at PaymentIntent-creation time -- that only happens later,
+        # client-side, via Stripe.js). Everything stripe.StripeError can
+        # raise at this call site is an account/connectivity problem (a
+        # bad API key, Stripe being unreachable, a malformed request) --
+        # i.e. OUR fault or Stripe's, never the taxpayer's, so a generic
+        # message is appropriate rather than relaying exc's internals.
+        #
+        # This catch matters beyond a nicer error message: an uncaught
+        # exception here reaches FastAPI as an unhandled 500, and Starlette's
+        # ServerErrorMiddleware generates that 500 OUTSIDE the normal
+        # response path CORSMiddleware hooks into -- so the response has
+        # NO CORS headers, and the browser reports a bare "Failed to fetch"
+        # with the real error completely invisible. Confirmed by reproducing
+        # this exact failure against a real (deliberately invalid) Stripe
+        # key: curl saw a plain 500 with no access-control-allow-origin
+        # header, and the browser correctly refused to expose it to JS.
+        raise PaymentError(
+            "Could not start the payment -- the payment system is temporarily unavailable. Please try again shortly."
+        ) from exc
 
     filing.payment_provider_ref = intent.id
     return intent

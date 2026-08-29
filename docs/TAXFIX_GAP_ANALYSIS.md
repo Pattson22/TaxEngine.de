@@ -24,13 +24,13 @@ support for employment income, capital gains (Anlage KAP), rental income
 | Kinderfreibetrag vs. Kindergeld Günstigerprüfung | ✅ | ✅ (children as a plain count, not first-class entities — see `kinderfreibetrag.py`) |
 | Real payment integration | ✅ | ✅ (Stripe PaymentIntent + verified webhook) |
 | ELSTER submission | ✅ | 🔶 full orchestration + XML generation built and tested; blocked on an actual BZSt developer certificate (`NativeEricClient` is an explicit stub, not a fake success path) |
-| Guided interview UX / mobile apps | ✅ | ❌ — no frontend built yet |
+| Guided interview UX / mobile apps | ✅ | 🔶 a working Next.js web frontend exists (`frontend/`), click-tested through register → calculate → view-results in a real browser — no mobile apps, no guided-interview-style Q&A (it's a form-based flow), and Stripe Elements card entry itself is untested (no real test keys — see `frontend/README.md`) |
 | Document OCR (auto-read Lohnsteuerbescheinigung) | ✅ | ❌ |
-| Multi-language UI | ✅ (English for expats) | ❌ — no UI yet |
+| Multi-language UI | ✅ (English for expats) | ❌ — English only, no i18n |
 
 ## What closed the gap
 
-Everything marked ✅ above is real, tested code — `backend/tests/` (212
+Everything marked ✅ above is real, tested code — `backend/tests/` (215
 unit tests, 100% `tax_engine` coverage) plus live end-to-end smoke tests
 against a real Dockerized Postgres for every feature, not just design
 notes. A few highlights:
@@ -71,12 +71,29 @@ notes. A few highlights:
   the real `NativeEricClient` needs a BZSt developer certificate this
   project doesn't have. The stub is explicit about what it is; it never
   pretends to be a real government submission.
+- **Frontend** (`frontend/`) — Next.js + TypeScript, the golden path end to
+  end (register → dashboard → add income/deductions → calculate → pay via
+  Stripe Elements → submit). Verified via a clean production build, clean
+  lint, and a real click-through in Chrome (register → dashboard → add
+  wage income → add a commute deduction → calculate → view the refund
+  breakdown), every displayed figure cross-checked against the backend's
+  own numbers. That browser session caught a real bug: an unhandled Stripe
+  API error reached FastAPI as a bare 500 with no CORS headers (Starlette's
+  `ServerErrorMiddleware` bypasses `CORSMiddleware` for unhandled
+  exceptions), so the browser reported an opaque "Failed to fetch" instead
+  of a usable error — fixed by explicitly catching `stripe.StripeError` in
+  `payment_service.py`, with a regression test.
 
 ## What's still a real gap
 
-1. **Guided interview UX, mobile apps, document OCR, multi-language UI** —
-   entirely product/frontend work; no frontend exists yet. This is now
-   the single largest remaining gap.
+1. **Guided interview-style UX, mobile apps, document OCR, multi-language
+   UI** — the current frontend is a straightforward form-based flow
+   covering wage income and five deduction categories, not a guided Q&A
+   interview, and has no mobile app, OCR, or i18n. Capital gains, rental
+   income, self-employment income, and the Kinderfreibetrag/Kindergeld
+   inputs all have working backend routes but no frontend form yet — see
+   `frontend/README.md`'s "Known simplifications". This is still the
+   largest remaining gap, just a narrower one than "no frontend at all".
 2. **A real `NativeEricClient`** — requires a signed BZSt developer
    agreement, the actual ERiC SDK, and a registered Herstellernummer/
    Softwarezertifikat. See `docs/ELSTER_ERIC_INTEGRATION.md` and
