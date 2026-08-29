@@ -14,6 +14,7 @@ import type {
   TokenResponse,
   User,
   WageCertificateExtraction,
+  WageTaxCertificate,
 } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -161,8 +162,14 @@ export function submitTaxFiling(token: string, filingId: string): Promise<TaxFil
 
 // --- Wage tax certificates ---
 
-export function listWageTaxCertificates(token: string, taxYear: number) {
-  return request(`/wage-tax-certificates?tax_year=${taxYear}`, { token });
+export function listWageTaxCertificates(
+  token: string,
+  taxYear?: number,
+): Promise<WageTaxCertificate[]> {
+  return request<WageTaxCertificate[]>(
+    `/wage-tax-certificates${taxYear ? `?tax_year=${taxYear}` : ""}`,
+    { token },
+  );
 }
 
 export function createWageTaxCertificate(
@@ -201,11 +208,12 @@ export function extractWageTaxCertificate(
 
 export function listCapitalIncomeStatements(
   token: string,
-  taxYear: number,
+  taxYear?: number,
 ): Promise<CapitalIncomeStatement[]> {
-  return request<CapitalIncomeStatement[]>(`/capital-income-statements?tax_year=${taxYear}`, {
-    token,
-  });
+  return request<CapitalIncomeStatement[]>(
+    `/capital-income-statements${taxYear ? `?tax_year=${taxYear}` : ""}`,
+    { token },
+  );
 }
 
 export function createCapitalIncomeStatement(
@@ -230,11 +238,12 @@ export function createCapitalIncomeStatement(
 
 export function listRentalPropertyStatements(
   token: string,
-  taxYear: number,
+  taxYear?: number,
 ): Promise<RentalPropertyStatement[]> {
-  return request<RentalPropertyStatement[]>(`/rental-property-statements?tax_year=${taxYear}`, {
-    token,
-  });
+  return request<RentalPropertyStatement[]>(
+    `/rental-property-statements${taxYear ? `?tax_year=${taxYear}` : ""}`,
+    { token },
+  );
 }
 
 export function createRentalPropertyStatement(
@@ -257,11 +266,12 @@ export function createRentalPropertyStatement(
 
 export function listSelfEmploymentStatements(
   token: string,
-  taxYear: number,
+  taxYear?: number,
 ): Promise<SelfEmploymentStatement[]> {
-  return request<SelfEmploymentStatement[]>(`/self-employment-statements?tax_year=${taxYear}`, {
-    token,
-  });
+  return request<SelfEmploymentStatement[]>(
+    `/self-employment-statements${taxYear ? `?tax_year=${taxYear}` : ""}`,
+    { token },
+  );
 }
 
 export function createSelfEmploymentStatement(
