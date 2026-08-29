@@ -19,3 +19,10 @@ export function eurosToCents(euros: string | number): number {
   if (Number.isNaN(value)) return 0;
   return Math.round(value * 100);
 }
+
+/** Plain "45000.00" for a number input's value -- not formatCents()'s
+ * currency-symbol-and-thousands-separator display string. */
+export function centsToEuroInputValue(cents: number | null | undefined): string {
+  if (cents === null || cents === undefined) return "";
+  return (cents / 100).toFixed(2);
+}

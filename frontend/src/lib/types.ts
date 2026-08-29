@@ -71,6 +71,16 @@ export interface TokenResponse {
   token_type: string;
 }
 
+export interface WageCertificateExtraction {
+  employer_name: string | null;
+  gross_wage_cents: number | null;
+  income_tax_withheld_cents: number | null;
+  solidarity_surcharge_cents: number | null;
+  church_tax_withheld_cents: number | null;
+  warnings: string[];
+  source_document_url: string;
+}
+
 export interface WageTaxCertificate {
   id: string;
   tax_year: number;

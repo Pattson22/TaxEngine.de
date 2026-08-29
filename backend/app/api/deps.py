@@ -5,6 +5,8 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.documents.extraction_client import AnthropicDocumentExtractionClient, DocumentExtractionClient
+from app.documents.storage import DocumentStorage, S3DocumentStorage
 from app.models.user import User
 from app.security import decode_access_token
 
@@ -30,3 +32,11 @@ def get_current_user(
         raise _CREDENTIALS_ERROR
 
     return user
+
+
+def get_document_storage() -> DocumentStorage:
+    return S3DocumentStorage()
+
+
+def get_document_extraction_client() -> DocumentExtractionClient:
+    return AnthropicDocumentExtractionClient()

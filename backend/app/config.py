@@ -35,6 +35,24 @@ class Settings(BaseSettings):
     stripe_secret_key: str = "sk_test_placeholder_override_in_env"
     stripe_webhook_secret: str = "whsec_placeholder_override_in_env"
 
+    # Document upload/extraction (Lohnsteuerbescheinigung PDFs, images,
+    # Word docs). ANTHROPIC_API_KEY MUST be overridden via environment
+    # variable in any environment where extraction is actually used --
+    # this placeholder exists only so the app can boot without a .env
+    # file; any call against it fails loudly against the real Anthropic
+    # API, never silently succeeds.
+    anthropic_api_key: str = "sk-ant-placeholder_override_in_env"
+
+    # S3-compatible object storage for uploaded documents. Works
+    # unmodified against AWS S3, Cloudflare R2, Railway buckets, MinIO,
+    # or any other S3-API-compatible provider -- only the endpoint/
+    # credentials change between them, never the client code.
+    s3_endpoint_url: str = "http://localhost:9000"
+    s3_bucket_name: str = "taxengine-documents"
+    s3_access_key_id: str = "placeholder_override_in_env"
+    s3_secret_access_key: str = "placeholder_override_in_env"
+    s3_region: str = "us-east-1"
+
     environment: str = "development"
 
 

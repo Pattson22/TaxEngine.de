@@ -13,6 +13,7 @@ import type {
   TaxFiling,
   TokenResponse,
   User,
+  WageCertificateExtraction,
 } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -33,10 +34,15 @@ async function request<T>(
 ): Promise<T> {
   const { token, headers, ...rest } = options;
 
+  // A FormData body (multipart file upload) must NOT get an explicit
+  // Content-Type -- the browser sets one itself, including the boundary
+  // string, which we have no way to reproduce here.
+  const isFormData = typeof FormData !== "undefined" && rest.body instanceof FormData;
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
     headers: {
-      ...(rest.body ? { "Content-Type": "application/json" } : {}),
+      ...(rest.body && !isFormData ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
@@ -168,12 +174,26 @@ export function createWageTaxCertificate(
     income_tax_withheld_cents?: number;
     solidarity_surcharge_cents?: number;
     church_tax_withheld_cents?: number;
+    source_document_url?: string;
   },
 ) {
   return request("/wage-tax-certificates", {
     method: "POST",
     token,
     body: JSON.stringify(payload),
+  });
+}
+
+export function extractWageTaxCertificate(
+  token: string,
+  file: File,
+): Promise<WageCertificateExtraction> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request<WageCertificateExtraction>("/wage-tax-certificates/extract", {
+    method: "POST",
+    token,
+    body: formData,
   });
 }
 
