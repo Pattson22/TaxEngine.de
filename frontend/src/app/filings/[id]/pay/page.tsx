@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { createPaymentIntent } from "@/lib/api";
-import { useRequireAuth } from "@/lib/use-require-auth";
+import { useRequireOnboarding } from "@/lib/use-require-auth";
 import { getStripe } from "@/lib/stripe";
 import { formatCents } from "@/lib/money";
 import { Button, Card, ErrorBanner, Eyebrow, PageHeading } from "@/components/ui";
 
 export default function PayFilingPage() {
   const { id } = useParams<{ id: string }>();
-  const { token, isLoading: authLoading } = useRequireAuth();
+  const { token, isLoading: authLoading } = useRequireOnboarding();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [amountCents, setAmountCents] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);

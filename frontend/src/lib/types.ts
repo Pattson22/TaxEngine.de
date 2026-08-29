@@ -52,6 +52,12 @@ export interface User {
   first_name: string;
   last_name: string;
   tax_identification_number: string | null;
+  date_of_birth: string | null;
+  street: string | null;
+  house_number: string | null;
+  postal_code: string | null;
+  city: string | null;
+  steuernummer: string | null;
   residence_state: FederalState;
   tax_class: TaxClass;
   church_tax_type: ChurchTaxType;

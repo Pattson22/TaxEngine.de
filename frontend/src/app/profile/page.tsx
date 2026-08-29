@@ -54,6 +54,12 @@ export default function ProfilePage() {
 
     const formData = new FormData(event.currentTarget);
     const steuerId = String(formData.get("tax_identification_number") ?? "").trim();
+    const dateOfBirth = String(formData.get("date_of_birth") ?? "").trim();
+    const street = String(formData.get("street") ?? "").trim();
+    const houseNumber = String(formData.get("house_number") ?? "").trim();
+    const postalCode = String(formData.get("postal_code") ?? "").trim();
+    const city = String(formData.get("city") ?? "").trim();
+    const steuernummer = String(formData.get("steuernummer") ?? "").trim();
 
     try {
       await updateCurrentUser(token as string, {
@@ -64,6 +70,12 @@ export default function ProfilePage() {
         church_tax_type: String(formData.get("church_tax_type")) as ChurchTaxType,
         is_joint_assessment: formData.get("is_joint_assessment") === "on",
         tax_identification_number: steuerId === "" ? null : steuerId,
+        date_of_birth: dateOfBirth === "" ? null : dateOfBirth,
+        street: street === "" ? null : street,
+        house_number: houseNumber === "" ? null : houseNumber,
+        postal_code: postalCode === "" ? null : postalCode,
+        city: city === "" ? null : city,
+        steuernummer: steuernummer === "" ? null : steuernummer,
       });
       await refreshUser();
       setSavedAt(Date.now());
@@ -114,6 +126,59 @@ export default function ProfilePage() {
             <p className="mt-1.5 text-xs text-ink/40">
               Required before a return can be submitted to the Finanzamt. Find it on any prior
               tax assessment or your Lohnsteuerbescheinigung.
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="date_of_birth">Date of birth</Label>
+            <Input
+              id="date_of_birth"
+              name="date_of_birth"
+              type="date"
+              defaultValue={user.date_of_birth ?? ""}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto]">
+            <div>
+              <Label htmlFor="street">Street</Label>
+              <Input id="street" name="street" defaultValue={user.street ?? ""} />
+            </div>
+            <div>
+              <Label htmlFor="house_number">No.</Label>
+              <Input
+                id="house_number"
+                name="house_number"
+                defaultValue={user.house_number ?? ""}
+                className="sm:w-20"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[auto_1fr]">
+            <div>
+              <Label htmlFor="postal_code">Postal code</Label>
+              <Input
+                id="postal_code"
+                name="postal_code"
+                defaultValue={user.postal_code ?? ""}
+                pattern="\d{5}"
+                title="5 digits."
+                inputMode="numeric"
+                className="sm:w-24"
+              />
+            </div>
+            <div>
+              <Label htmlFor="city">City</Label>
+              <Input id="city" name="city" defaultValue={user.city ?? ""} />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="steuernummer">Steuernummer</Label>
+            <Input id="steuernummer" name="steuernummer" defaultValue={user.steuernummer ?? ""} />
+            <p className="mt-1.5 text-xs text-ink/40">
+              Issued by your local Finanzamt — different from your Steuer-ID above.
             </p>
           </div>
 

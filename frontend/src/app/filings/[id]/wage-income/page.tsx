@@ -3,13 +3,13 @@
 import { useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createWageTaxCertificate, getTaxFiling } from "@/lib/api";
-import { useRequireAuth } from "@/lib/use-require-auth";
+import { useRequireOnboarding } from "@/lib/use-require-auth";
 import { eurosToCents } from "@/lib/money";
 import { Button, Card, ErrorBanner, Eyebrow, Input, Label, PageHeading } from "@/components/ui";
 
 export default function AddWageIncomePage() {
   const { id } = useParams<{ id: string }>();
-  const { token, isLoading: authLoading } = useRequireAuth();
+  const { token, isLoading: authLoading } = useRequireOnboarding();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);

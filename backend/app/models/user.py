@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Text, text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Text, text
 from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,6 +33,10 @@ class User(Base):
             "tax_identification_number IS NULL OR tax_identification_number ~ '^\\d{11}$'",
             name="chk_steuer_id_format",
         ),
+        CheckConstraint(
+            "postal_code IS NULL OR postal_code ~ '^\\d{5}$'",
+            name="chk_users_postal_code_format",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -43,6 +47,23 @@ class User(Base):
     first_name: Mapped[str] = mapped_column(Text, nullable=False)
     last_name: Mapped[str] = mapped_column(Text, nullable=False)
     tax_identification_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Onboarding profile -- collected in a mandatory post-login step
+    # (frontend `/onboarding`), not at registration. All nullable at the
+    # DB layer since existing rows predate this; `nullable=True` here is
+    # a storage fact, not a statement that the app treats them as
+    # optional -- see the frontend's isProfileComplete() gate.
+    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    street: Mapped[str | None] = mapped_column(Text, nullable=True)
+    house_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    postal_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    city: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Steuernummer (Finanzamt-issued, changes when you move) -- distinct
+    # from tax_identification_number (Steuer-ID, permanent, national).
+    # ELSTER submissions need both. Format varies by Bundesland (digit
+    # count and slash grouping differ), so unlike Steuer-ID this has no
+    # single regex to validate against.
+    steuernummer: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     residence_state: Mapped[FederalState] = mapped_column(
         pg_enum(FederalState, "federal_state_enum"), nullable=False

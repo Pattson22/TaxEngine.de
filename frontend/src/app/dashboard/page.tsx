@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createTaxFiling, getSupportedTaxYears, listTaxFilings } from "@/lib/api";
-import { useRequireAuth } from "@/lib/use-require-auth";
+import { useRequireOnboarding } from "@/lib/use-require-auth";
 import { formatCents } from "@/lib/money";
 import { Button, Card, ErrorBanner, Eyebrow, Label, PageHeading, Select, StatusStamp } from "@/components/ui";
 import type { TaxFiling } from "@/lib/types";
 
 export default function DashboardPage() {
-  const { token, isLoading: authLoading } = useRequireAuth();
+  const { token, isLoading: authLoading } = useRequireOnboarding();
   const router = useRouter();
   const [filings, setFilings] = useState<TaxFiling[]>([]);
   const [supportedYears, setSupportedYears] = useState<number[]>([]);

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -34,6 +34,12 @@ class UserUpdate(BaseModel):
     church_tax_type: ChurchTaxType | None = None
     is_joint_assessment: bool | None = None
     tax_identification_number: str | None = Field(default=None, pattern=r"^\d{11}$")
+    date_of_birth: date | None = None
+    street: str | None = Field(default=None, min_length=1)
+    house_number: str | None = Field(default=None, min_length=1)
+    postal_code: str | None = Field(default=None, pattern=r"^\d{5}$")
+    city: str | None = Field(default=None, min_length=1)
+    steuernummer: str | None = Field(default=None, min_length=1, max_length=20)
 
 
 class UserRead(BaseModel):
@@ -44,6 +50,12 @@ class UserRead(BaseModel):
     first_name: str
     last_name: str
     tax_identification_number: str | None
+    date_of_birth: date | None
+    street: str | None
+    house_number: str | None
+    postal_code: str | None
+    city: str | None
+    steuernummer: str | None
     residence_state: FederalState
     tax_class: TaxClass
     church_tax_type: ChurchTaxType

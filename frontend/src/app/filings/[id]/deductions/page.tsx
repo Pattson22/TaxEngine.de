@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createDeduction, getTaxFiling } from "@/lib/api";
-import { useRequireAuth } from "@/lib/use-require-auth";
+import { useRequireOnboarding } from "@/lib/use-require-auth";
 import { eurosToCents } from "@/lib/money";
 import { Button, Card, ErrorBanner, Eyebrow, Input, Label, PageHeading, Select } from "@/components/ui";
 import type { DeductionCategory } from "@/lib/types";
@@ -33,7 +33,7 @@ const COMPUTED_CATEGORIES = new Set<DeductionCategory>([
 
 export default function AddDeductionPage() {
   const { id } = useParams<{ id: string }>();
-  const { token, isLoading: authLoading } = useRequireAuth();
+  const { token, isLoading: authLoading } = useRequireOnboarding();
   const router = useRouter();
   const [category, setCategory] = useState<DeductionCategory>("COMMUTE");
   const [error, setError] = useState<string | null>(null);

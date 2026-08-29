@@ -14,7 +14,7 @@ import {
   submitTaxFiling,
   updateTaxFiling,
 } from "@/lib/api";
-import { useRequireAuth } from "@/lib/use-require-auth";
+import { useRequireOnboarding } from "@/lib/use-require-auth";
 import { eurosToCents, formatCents } from "@/lib/money";
 import { Button, Card, ErrorBanner, Eyebrow, Input, Label, StatusStamp } from "@/components/ui";
 import { Ledger, LedgerLine } from "@/components/ledger";
@@ -29,7 +29,7 @@ import type {
 
 export default function FilingDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { token, isLoading: authLoading } = useRequireAuth();
+  const { token, isLoading: authLoading } = useRequireOnboarding();
   const router = useRouter();
 
   const [filing, setFiling] = useState<TaxFiling | null>(null);
