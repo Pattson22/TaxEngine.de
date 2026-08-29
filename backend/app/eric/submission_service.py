@@ -16,7 +16,10 @@ from sqlalchemy.orm import Session
 
 from app.eric.client import EricClient, EricSubmissionError, EricValidationError, StubEricClient
 from app.eric.xml_builder import build_est_xml
+from app.models.capital_income_statement import CapitalIncomeStatement
 from app.models.enums import FilingStatus
+from app.models.rental_property_statement import RentalPropertyStatement
+from app.models.self_employment_statement import SelfEmploymentStatement
 from app.models.tax_filing import TaxFiling
 from app.models.user import User
 from app.models.wage_tax_certificate import WageTaxCertificate
@@ -71,7 +74,38 @@ def submit_filing(
         .filter(WageTaxCertificate.user_id == user.id, WageTaxCertificate.tax_year == filing.tax_year)
         .all()
     )
-    xml = build_est_xml(user, filing, wage_certs)
+    capital_income_statements = (
+        db.query(CapitalIncomeStatement)
+        .filter(
+            CapitalIncomeStatement.user_id == user.id,
+            CapitalIncomeStatement.tax_year == filing.tax_year,
+        )
+        .all()
+    )
+    rental_property_statements = (
+        db.query(RentalPropertyStatement)
+        .filter(
+            RentalPropertyStatement.user_id == user.id,
+            RentalPropertyStatement.tax_year == filing.tax_year,
+        )
+        .all()
+    )
+    self_employment_statements = (
+        db.query(SelfEmploymentStatement)
+        .filter(
+            SelfEmploymentStatement.user_id == user.id,
+            SelfEmploymentStatement.tax_year == filing.tax_year,
+        )
+        .all()
+    )
+    xml = build_est_xml(
+        user,
+        filing,
+        wage_certs,
+        capital_income_statements,
+        rental_property_statements,
+        self_employment_statements,
+    )
 
     try:
         eric_client.validate_xml(xml)

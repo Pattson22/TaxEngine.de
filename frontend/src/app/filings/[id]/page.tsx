@@ -10,6 +10,7 @@ import {
   listRentalPropertyStatements,
   listSelfEmploymentStatements,
   listWageTaxCertificates,
+  submitTaxFiling,
   updateTaxFiling,
 } from "@/lib/api";
 import { useRequireAuth } from "@/lib/use-require-auth";
@@ -38,6 +39,7 @@ export default function FilingDetailPage() {
   const [selfEmployment, setSelfEmployment] = useState<SelfEmploymentStatement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCalculating, setIsCalculating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
@@ -78,6 +80,20 @@ export default function FilingDetailPage() {
       setError(err instanceof Error ? err.message : "Couldn't calculate this return.");
     } finally {
       setIsCalculating(false);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!token) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const updated = await submitTaxFiling(token, id);
+      setFiling(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't submit this return.");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -375,10 +391,15 @@ export default function FilingDetailPage() {
                 )}
               </div>
             ) : (
-              <p className="mt-3 text-sm text-ink/45">
-                Fee paid — ready to submit. (Uses a test integration until a real ELSTER
-                developer certificate is in place.)
-              </p>
+              <div className="mt-3">
+                <p className="text-sm text-ink/45">
+                  Fee paid — ready to submit. (Uses a test integration until a real ELSTER
+                  developer certificate is in place.)
+                </p>
+                <Button className="mt-3" onClick={handleSubmit} disabled={isSubmitting}>
+                  {isSubmitting ? "Submitting…" : "Submit to the Finanzamt"}
+                </Button>
+              </div>
             )}
           </section>
         )}

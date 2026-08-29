@@ -18,8 +18,11 @@ from app.eric.client import (
     StubEricClient,
 )
 from app.eric.submission_service import SubmissionError, submit_filing
-from app.eric.xml_builder import build_est_xml
+from app.eric.xml_builder import _cents_to_euro_str, build_est_xml
+from app.models.capital_income_statement import CapitalIncomeStatement
 from app.models.enums import ChurchTaxType, FederalState, FilingStatus, TaxClass
+from app.models.rental_property_statement import RentalPropertyStatement
+from app.models.self_employment_statement import SelfEmploymentStatement
 from app.models.tax_filing import TaxFiling
 from app.models.user import User
 from app.models.wage_tax_certificate import WageTaxCertificate
@@ -78,6 +81,92 @@ class TestXmlBuilder:
         user = _make_user(tax_identification_number=None)
         xml = build_est_xml(user, _make_filing(), [])
         assert "<SteuerId />" in xml or "<SteuerId></SteuerId>" in xml
+
+    def test_includes_capital_income_statements_and_their_tax(self):
+        filing = _make_filing(
+            capital_gains_tax_cents=25_000,
+            capital_gains_soli_cents=1_375,
+            capital_gains_church_tax_cents=0,
+        )
+        stmt = CapitalIncomeStatement(
+            institution_name="Trade Republic",
+            gross_income_cents=150_000,
+            kapitalertragsteuer_withheld_cents=0,
+        )
+
+        xml = build_est_xml(_make_user(), filing, [], capital_income_statements=[stmt])
+
+        assert "Trade Republic" in xml
+        assert "1500.00" in xml  # gross capital income
+        assert "250.00" in xml  # capital_gains_tax_cents -> euro
+        assert "13.75" in xml  # capital_gains_soli_cents -> euro
+
+    def test_includes_rental_property_statement_with_a_negative_net_result(self):
+        # A loss-making property is a legitimate signed negative result
+        # (§2 Abs. 3 EStG) -- must not come out mangled by divmod on a
+        # negative cents value.
+        filing = _make_filing(net_rental_income_cents=-55_000)
+        stmt = RentalPropertyStatement(
+            property_address="Musterstraße 1, Berlin",
+            gross_rental_income_cents=100_000,
+            deductible_expenses_cents=155_000,
+        )
+
+        xml = build_est_xml(_make_user(), filing, [], rental_property_statements=[stmt])
+
+        assert "Musterstraße 1, Berlin" in xml
+        assert "-550.00" in xml  # net rental loss, correctly signed
+
+    def test_includes_self_employment_statement(self):
+        filing = _make_filing(net_self_employment_income_cents=200_000)
+        stmt = SelfEmploymentStatement(
+            business_name="Muster Freelancing",
+            gross_revenue_cents=500_000,
+            deductible_expenses_cents=300_000,
+        )
+
+        xml = build_est_xml(_make_user(), filing, [], self_employment_statements=[stmt])
+
+        assert "Muster Freelancing" in xml
+        assert "2000.00" in xml  # net self-employment income
+
+    def test_includes_kinderfreibetrag_when_applied(self):
+        filing = _make_filing(
+            number_of_children=2,
+            kinderfreibetrag_applied=True,
+            kinderfreibetrag_total_cents=1_234_00,
+        )
+
+        xml = build_est_xml(_make_user(), filing, [])
+
+        assert "<AnzahlKinder>2</AnzahlKinder>" in xml
+        assert "1234.00" in xml
+
+    def test_includes_kindergeld_when_kinderfreibetrag_not_applied(self):
+        filing = _make_filing(
+            number_of_children=1,
+            kinderfreibetrag_applied=False,
+            kindergeld_received_cents=2_50000,
+        )
+
+        xml = build_est_xml(_make_user(), filing, [])
+
+        assert "<KindergeldErhalten>2500.00</KindergeldErhalten>" in xml
+
+    def test_omits_kinderfreibetrag_block_when_no_children(self):
+        xml = build_est_xml(_make_user(), _make_filing(), [])
+        assert "Kinderfreibetrag" not in xml
+
+
+class TestCentsToEuroStr:
+    def test_positive_cents(self):
+        assert _cents_to_euro_str(150_000) == "1500.00"
+
+    def test_negative_cents_keeps_correct_magnitude(self):
+        assert _cents_to_euro_str(-55_000) == "-550.00"
+
+    def test_none_defaults_to_zero(self):
+        assert _cents_to_euro_str(None) == "0.00"
 
 
 class TestStubEricClient:
