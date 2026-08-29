@@ -25,7 +25,12 @@ export function Nav() {
               <Link href="/dashboard" className="text-ink/60 transition-colors hover:text-ink">
                 Your returns
               </Link>
-              <span className="hidden text-ink/35 sm:inline">{user.email}</span>
+              <Link
+                href="/profile"
+                className="hidden text-ink/35 transition-colors hover:text-ink sm:inline"
+              >
+                {user.email}
+              </Link>
               <button
                 onClick={handleLogout}
                 className="border-b border-transparent text-ink/60 transition-colors hover:border-ink/30 hover:text-ink"
