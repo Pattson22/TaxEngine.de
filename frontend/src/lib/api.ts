@@ -4,9 +4,12 @@
 // request/response shapes this file mirrors.
 
 import type {
+  CapitalIncomeStatement,
   Deduction,
   DeductionCategory,
   PaymentIntentResponse,
+  RentalPropertyStatement,
+  SelfEmploymentStatement,
   TaxFiling,
   TokenResponse,
   User,
@@ -168,6 +171,89 @@ export function createWageTaxCertificate(
   },
 ) {
   return request("/wage-tax-certificates", {
+    method: "POST",
+    token,
+    body: JSON.stringify(payload),
+  });
+}
+
+// --- Capital income (Anlage KAP) ---
+
+export function listCapitalIncomeStatements(
+  token: string,
+  taxYear: number,
+): Promise<CapitalIncomeStatement[]> {
+  return request<CapitalIncomeStatement[]>(`/capital-income-statements?tax_year=${taxYear}`, {
+    token,
+  });
+}
+
+export function createCapitalIncomeStatement(
+  token: string,
+  payload: {
+    tax_year: number;
+    institution_name: string;
+    gross_income_cents: number;
+    kapitalertragsteuer_withheld_cents?: number;
+    solidarity_surcharge_withheld_cents?: number;
+    church_tax_withheld_cents?: number;
+  },
+): Promise<CapitalIncomeStatement> {
+  return request<CapitalIncomeStatement>("/capital-income-statements", {
+    method: "POST",
+    token,
+    body: JSON.stringify(payload),
+  });
+}
+
+// --- Rental income (Anlage V) ---
+
+export function listRentalPropertyStatements(
+  token: string,
+  taxYear: number,
+): Promise<RentalPropertyStatement[]> {
+  return request<RentalPropertyStatement[]>(`/rental-property-statements?tax_year=${taxYear}`, {
+    token,
+  });
+}
+
+export function createRentalPropertyStatement(
+  token: string,
+  payload: {
+    tax_year: number;
+    property_address: string;
+    gross_rental_income_cents: number;
+    deductible_expenses_cents?: number;
+  },
+): Promise<RentalPropertyStatement> {
+  return request<RentalPropertyStatement>("/rental-property-statements", {
+    method: "POST",
+    token,
+    body: JSON.stringify(payload),
+  });
+}
+
+// --- Self-employment income (Anlage S / EÜR) ---
+
+export function listSelfEmploymentStatements(
+  token: string,
+  taxYear: number,
+): Promise<SelfEmploymentStatement[]> {
+  return request<SelfEmploymentStatement[]>(`/self-employment-statements?tax_year=${taxYear}`, {
+    token,
+  });
+}
+
+export function createSelfEmploymentStatement(
+  token: string,
+  payload: {
+    tax_year: number;
+    business_name: string;
+    gross_revenue_cents: number;
+    deductible_expenses_cents?: number;
+  },
+): Promise<SelfEmploymentStatement> {
+  return request<SelfEmploymentStatement>("/self-employment-statements", {
     method: "POST",
     token,
     body: JSON.stringify(payload),

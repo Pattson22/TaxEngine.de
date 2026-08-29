@@ -130,6 +130,35 @@ export interface TaxFiling {
   updated_at: string;
 }
 
+export interface CapitalIncomeStatement {
+  id: string;
+  tax_year: number;
+  institution_name: string;
+  gross_income_cents: number;
+  kapitalertragsteuer_withheld_cents: number;
+  solidarity_surcharge_withheld_cents: number;
+  church_tax_withheld_cents: number;
+  created_at: string;
+}
+
+export interface RentalPropertyStatement {
+  id: string;
+  tax_year: number;
+  property_address: string;
+  gross_rental_income_cents: number;
+  deductible_expenses_cents: number;
+  created_at: string;
+}
+
+export interface SelfEmploymentStatement {
+  id: string;
+  tax_year: number;
+  business_name: string;
+  gross_revenue_cents: number;
+  deductible_expenses_cents: number;
+  created_at: string;
+}
+
 export interface PaymentIntentResponse {
   client_secret: string;
   payment_intent_id: string;

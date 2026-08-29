@@ -2,10 +2,19 @@
 
 Comparison baseline: Taxfix's current public positioning — guided
 interview-style Q&A flow, English-language interface for expats, ELSTER
-submission via a backend integration, ~€34.99/return, and documented
-support for employment income, capital gains (Anlage KAP), rental income
-(Anlage V), donations, childcare costs, and household/craftsperson services
-(§35a). Sources: [Live In Germany — Best Tax Return Software 2026](https://liveingermany.de/best-tax-return-software-in-germany/), [CountryTaxCalc — German Tax Return Guide for Expats 2026](https://www.countrytaxcalc.com/tax-guides/germany-tax-return-guide-expats-2026/), [Taxfix — Kapitalerträge](https://support.taxfix.de/hc/en-us/articles/25293688896413-Capital-gains-in-the-tax-return), [Taxfix — Vermietung und Verpachtung](https://support.taxfix.de/hc/en-us/articles/24591090135325-Renting-and-leasing-in-the-Taxfix-app), [Taxfix — Kinderbetreuungskosten](https://taxfix.de/ratgeber/steuern-sparen/kinderbetreuungskosten-absetzen/), [§35a EStG](https://dejure.org/gesetze/EStG/35a.html).
+submission via a backend integration, and documented support for
+employment income, capital gains (Anlage KAP), rental income (Anlage V),
+donations, childcare costs, and household/craftsperson services (§35a).
+Sources: [Live In Germany — Best Tax Return Software 2026](https://liveingermany.de/best-tax-return-software-in-germany/), [CountryTaxCalc — German Tax Return Guide for Expats 2026](https://www.countrytaxcalc.com/tax-guides/germany-tax-return-guide-expats-2026/), [Taxfix — Kapitalerträge](https://support.taxfix.de/hc/en-us/articles/25293688896413-Capital-gains-in-the-tax-return), [Taxfix — Vermietung und Verpachtung](https://support.taxfix.de/hc/en-us/articles/24591090135325-Renting-and-leasing-in-the-Taxfix-app), [Taxfix — Kinderbetreuungskosten](https://taxfix.de/ratgeber/steuern-sparen/kinderbetreuungskosten-absetzen/), [§35a EStG](https://dejure.org/gesetze/EStG/35a.html).
+
+**Pricing (2026-08 research)**: Taxfix charges €39.99/year (subscription)
+or €49.99 one-time for an individual return, €59.99/€69.99 for joint —
+plus a separate 20%-of-refund (min. €99.99) human-advisor Expert Service.
+That's notably more than TaxEngine.de's flat €34.90, and unlike Taxfix
+there's no subscription tier or refund-percentage pricing to compare
+against — one flat fee, once, when you file. (An earlier version of this
+doc incorrectly attributed TaxEngine.de's own €34.90 price to Taxfix —
+corrected here.) Sources: [Taxfix — costs at a glance](https://taxfix.de/en/costs/), [Taxfix — Kosten im Überblick](https://taxfix.de/kosten/), [Taxfix — Experten-Service](https://taxfix.de/experten-service/).
 
 ## Current state
 
@@ -27,10 +36,12 @@ support for employment income, capital gains (Anlage KAP), rental income
 | Guided interview UX / mobile apps | ✅ | 🔶 a working Next.js web frontend exists (`frontend/`), click-tested through register → calculate → view-results in a real browser — no mobile apps, no guided-interview-style Q&A (it's a form-based flow), and Stripe Elements card entry itself is untested (no real test keys — see `frontend/README.md`) |
 | Document OCR (auto-read Lohnsteuerbescheinigung) | ✅ | ❌ |
 | Multi-language UI | ✅ (English for expats) | ❌ — English only, no i18n |
+| Frontend forms for capital gains / rental / self-employment / Kinderfreibetrag | ✅ | ✅ — added `filings/[id]/{capital-income,rental-income,self-employment}` pages plus an inline Kinderfreibetrag form; previously these had working backend routes with no UI at all |
+| Filing creation restricted to actually-supported tax years | — (Taxfix supports 2022–2025 retroactively) | ✅ — `GET /tax-filings/supported-years` + a frontend year picker, though only 2024 has reviewed constants right now (see "What's still a real gap" below) |
 
 ## What closed the gap
 
-Everything marked ✅ above is real, tested code — `backend/tests/` (215
+Everything marked ✅ above is real, tested code — `backend/tests/` (220
 unit tests, 100% `tax_engine` coverage) plus live end-to-end smoke tests
 against a real Dockerized Postgres for every feature, not just design
 notes. A few highlights:
@@ -83,22 +94,45 @@ notes. A few highlights:
   exceptions), so the browser reported an opaque "Failed to fetch" instead
   of a usable error — fixed by explicitly catching `stripe.StripeError` in
   `payment_service.py`, with a regression test.
+- **Capital income / rental income / self-employment income / Kinderfreibetrag
+  frontend forms** (`filings/[id]/{capital-income,rental-income,self-employment}`
+  + the filing detail page's inline "Children" section) — these calculation
+  paths were fully built and unit-tested earlier but had no way to reach
+  them through the UI; the backend routes existed with zero frontend
+  callers. Also fixed `canCalculate` on the filing detail page, which
+  previously required a wage tax certificate even when a filer only had
+  e.g. self-employment income. Verified with a real browser click-through
+  (Trade Republic capital income, a loss-making Berlin rental property, a
+  profitable freelance business, 1 child) — the resulting taxable income
+  (9.234,00 €), capital gains tax (250,00 €), and total owed (263,00 €)
+  were hand-verified against the Pauschbetrag/Sparer-Pauschbetrag math,
+  and the rental loss correctly rendered as a negative (clay) ledger line.
 
 ## What's still a real gap
 
-1. **Guided interview-style UX, mobile apps, document OCR, multi-language
-   UI** — the current frontend is a straightforward form-based flow
-   covering wage income and five deduction categories, not a guided Q&A
-   interview, and has no mobile app, OCR, or i18n. Capital gains, rental
-   income, self-employment income, and the Kinderfreibetrag/Kindergeld
-   inputs all have working backend routes but no frontend form yet — see
-   `frontend/README.md`'s "Known simplifications". This is still the
-   largest remaining gap, just a narrower one than "no frontend at all".
-2. **A real `NativeEricClient`** — requires a signed BZSt developer
+1. **Guided interview-style UX, mobile apps, document OCR/photo upload,
+   multi-language UI, ELSTER prefill (Vorausgefüllte Steuererklärung /
+   Belegabruf)** — the current frontend is a straightforward form-based
+   flow (every income/deduction type now has its own add-form, per the
+   table above), not a guided Q&A interview, and has no mobile app,
+   document scanning, i18n, or ELSTER data-prefill integration. This is
+   still the largest remaining gap. OCR and ELSTER prefill in particular
+   require infrastructure (an OCR service, a real ELSTER Belegabruf
+   integration) this project doesn't have — not attempted here.
+2. **Retroactive filing for prior tax years** — Taxfix supports 2022–2025.
+   `SUPPORTED_TAX_YEARS` (`tax_engine/constants.py`) only has a reviewed
+   entry for 2024; the year-picker mechanism (`GET
+   /tax-filings/supported-years`) is built to extend cleanly, but adding
+   e.g. 2022/2023 constants requires sourcing and verifying that year's
+   exact Grundfreibetrag/bracket thresholds/Pauschbeträge against the
+   official BMF publication — deliberately not guessed at here, since
+   `constants.py`'s own docstring treats it as "a compliance artifact, not
+   just code."
+3. **A real `NativeEricClient`** — requires a signed BZSt developer
    agreement, the actual ERiC SDK, and a registered Herstellernummer/
    Softwarezertifikat. See `docs/ELSTER_ERIC_INTEGRATION.md` and
    `app/eric/client.py`'s docstring for exactly what's needed.
-3. **Smaller, explicitly-documented approximations** worth revisiting
+4. **Smaller, explicitly-documented approximations** worth revisiting
    before this handles real filings: the §32d Abs. 6 EStG capital-gains
    Günstigerprüfung election, AfA depreciation schedules, Gewerbesteuer,
    Kinderfreibetrag as first-class child entities (birthdates, custody

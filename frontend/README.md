@@ -17,10 +17,13 @@ Requires the backend running (see `../backend/README.md`) with
 
 ## What's built
 
-The golden path end to end: register → log in → create a filing → add wage
-income → add a deduction (all computed categories — commute, home office,
-donations, childcare, Handwerkerleistungen — plus flat-amount categories)
-→ calculate → view the refund breakdown → pay via Stripe Elements → submit.
+The golden path end to end: register → log in → create a filing (from a
+year picker sourced from the backend's supported tax years) → add wage,
+capital, rental, and/or self-employment income → add a deduction (all
+computed categories — commute, home office, donations, childcare,
+Handwerkerleistungen — plus flat-amount categories) → set Kinderfreibetrag
+inputs → calculate → view the refund breakdown → pay via Stripe Elements →
+submit.
 
 ```
 src/
@@ -38,11 +41,14 @@ src/
 └── app/
     ├── page.tsx              Landing page
     ├── register/, login/     Auth
-    ├── dashboard/             List/create filings
+    ├── dashboard/             List/create filings (year picker, see below)
     └── filings/[id]/
         ├── page.tsx            Filing detail: income, deductions, calculate, results
         ├── wage-income/        Add a Lohnsteuerbescheinigung
         ├── deductions/         Add a deduction (category-aware form)
+        ├── capital-income/     Add capital income (Anlage KAP)
+        ├── rental-income/      Add a rental property (Anlage V)
+        ├── self-employment/    Add self-employment income (Anlage S / EÜR)
         └── pay/                 Stripe Elements checkout
 ```
 
@@ -80,14 +86,14 @@ look (no cream+serif, no near-black+neon, no newspaper hairlines):
   to an httpOnly cookie is a backend + frontend co-change (the backend
   would need to set/read the cookie and handle CSRF) — see
   `lib/auth-context.tsx`'s top comment.
-- **Only wage income + a subset of deduction categories have a UI.** The
-  backend also supports capital gains, rental income, self-employment
-  income, and the Kinderfreibetrag/Kindergeld Günstigerprüfung inputs
-  (`PATCH /tax-filings/{id}`) — none of those have a form here yet. The API
-  client (`lib/api.ts`) only wraps the routes this scaffold's pages
-  actually call; extending it to the rest of the backend's surface is
-  mechanical (same pattern, see the backend's `docs/TAXFIX_GAP_ANALYSIS.md`
-  for the full route list).
+- **Deduction categories beyond the five with a UI still need one.** Wage
+  income, capital income, rental income, self-employment income, and
+  Kinderfreibetrag/Kindergeld inputs all have forms now (see the file
+  structure above); the deductions form covers COMMUTE, HOME_OFFICE,
+  DONATIONS, CHILDCARE, HANDWERKERLEISTUNGEN, and flat-amount categories.
+  Anything else in the backend's surface not yet wrapped by `lib/api.ts`
+  follows the same mechanical pattern — see the backend's
+  `docs/TAXFIX_GAP_ANALYSIS.md` for the full route list.
 - **Types are hand-maintained, not generated.** `lib/types.ts` mirrors the
   backend's Pydantic schemas by hand. Once the API surface stabilizes,
   generating these from the backend's OpenAPI schema (e.g.
@@ -111,4 +117,10 @@ look (no cream+serif, no near-black+neon, no newspaper hairlines):
   instead), the `/submit` (ELSTER) page, and the deduction categories
   beyond COMMUTE (home office/donations/childcare/Handwerkerleistungen
   render the right dynamic fields per the code, but weren't individually
-  clicked through).
+  clicked through). The capital income/rental income/self-employment
+  income/Kinderfreibetrag forms added later **were** individually clicked
+  through in a real browser (Trade Republic capital income, a loss-making
+  rental property, and a profitable freelance business, plus 1 child),
+  with every figure in the resulting calculation — including the rental
+  loss correctly rendering in clay and the Günstigerprüfung note — hand
+  cross-checked against the backend's own arithmetic.

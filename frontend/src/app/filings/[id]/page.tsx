@@ -5,14 +5,25 @@ import { useParams, useRouter } from "next/navigation";
 import {
   calculateTaxFiling,
   getTaxFiling,
+  listCapitalIncomeStatements,
   listDeductions,
+  listRentalPropertyStatements,
+  listSelfEmploymentStatements,
   listWageTaxCertificates,
+  updateTaxFiling,
 } from "@/lib/api";
 import { useRequireAuth } from "@/lib/use-require-auth";
-import { formatCents } from "@/lib/money";
-import { Button, Card, ErrorBanner, Eyebrow, StatusStamp } from "@/components/ui";
+import { eurosToCents, formatCents } from "@/lib/money";
+import { Button, Card, ErrorBanner, Eyebrow, Input, Label, StatusStamp } from "@/components/ui";
 import { Ledger, LedgerLine } from "@/components/ledger";
-import type { Deduction, TaxFiling, WageTaxCertificate } from "@/lib/types";
+import type {
+  CapitalIncomeStatement,
+  Deduction,
+  RentalPropertyStatement,
+  SelfEmploymentStatement,
+  TaxFiling,
+  WageTaxCertificate,
+} from "@/lib/types";
 
 export default function FilingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +33,9 @@ export default function FilingDetailPage() {
   const [filing, setFiling] = useState<TaxFiling | null>(null);
   const [wageCerts, setWageCerts] = useState<WageTaxCertificate[]>([]);
   const [deductions, setDeductions] = useState<Deduction[]>([]);
+  const [capitalIncome, setCapitalIncome] = useState<CapitalIncomeStatement[]>([]);
+  const [rentalIncome, setRentalIncome] = useState<RentalPropertyStatement[]>([]);
+  const [selfEmployment, setSelfEmployment] = useState<SelfEmploymentStatement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,12 +44,18 @@ export default function FilingDetailPage() {
     if (!token) return;
     const loadedFiling = await getTaxFiling(token, id);
     setFiling(loadedFiling);
-    const [certs, deds] = await Promise.all([
+    const [certs, deds, capital, rental, selfEmp] = await Promise.all([
       listWageTaxCertificates(token, loadedFiling.tax_year) as Promise<WageTaxCertificate[]>,
       listDeductions(token, loadedFiling.tax_year),
+      listCapitalIncomeStatements(token, loadedFiling.tax_year),
+      listRentalPropertyStatements(token, loadedFiling.tax_year),
+      listSelfEmploymentStatements(token, loadedFiling.tax_year),
     ]);
     setWageCerts(certs);
     setDeductions(deds);
+    setCapitalIncome(capital);
+    setRentalIncome(rental);
+    setSelfEmployment(selfEmp);
   }, [token, id]);
 
   useEffect(() => {
@@ -66,7 +86,11 @@ export default function FilingDetailPage() {
   }
 
   const totalGrossWage = wageCerts.reduce((sum, c) => sum + c.gross_wage_cents, 0);
-  const canCalculate = wageCerts.length > 0;
+  const canCalculate =
+    wageCerts.length > 0 ||
+    capitalIncome.length > 0 ||
+    rentalIncome.length > 0 ||
+    selfEmployment.length > 0;
   const isCalculated = filing.status !== "DRAFT";
   const refundIsPositive = (filing.estimated_refund_cents ?? 0) >= 0;
 
@@ -149,6 +173,103 @@ export default function FilingDetailPage() {
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+              Capital income
+            </h2>
+            <button
+              onClick={() => router.push(`/filings/${id}/capital-income`)}
+              className="border-b border-brass/40 text-sm text-brass transition-colors hover:border-brass"
+            >
+              + Add
+            </button>
+          </div>
+          {capitalIncome.length === 0 ? (
+            <p className="text-sm text-ink/45">
+              Interest, dividends, or fund gains (Anlage KAP) — taxed separately at the flat
+              Abgeltungsteuer rate.
+            </p>
+          ) : (
+            <Ledger>
+              {capitalIncome.map((c, i) => (
+                <LedgerLine
+                  key={c.id}
+                  label={c.institution_name}
+                  value={formatCents(c.gross_income_cents)}
+                  delay={i * 60}
+                />
+              ))}
+            </Ledger>
+          )}
+        </section>
+
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+              Rental income
+            </h2>
+            <button
+              onClick={() => router.push(`/filings/${id}/rental-income`)}
+              className="border-b border-brass/40 text-sm text-brass transition-colors hover:border-brass"
+            >
+              + Add property
+            </button>
+          </div>
+          {rentalIncome.length === 0 ? (
+            <p className="text-sm text-ink/45">Vermietung und Verpachtung (Anlage V).</p>
+          ) : (
+            <Ledger>
+              {rentalIncome.map((r, i) => {
+                const netCents = r.gross_rental_income_cents - r.deductible_expenses_cents;
+                return (
+                  <LedgerLine
+                    key={r.id}
+                    label={r.property_address}
+                    value={formatCents(netCents)}
+                    tone={netCents >= 0 ? "positive" : "negative"}
+                    delay={i * 60}
+                  />
+                );
+              })}
+            </Ledger>
+          )}
+        </section>
+
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+              Self-employment income
+            </h2>
+            <button
+              onClick={() => router.push(`/filings/${id}/self-employment`)}
+              className="border-b border-brass/40 text-sm text-brass transition-colors hover:border-brass"
+            >
+              + Add
+            </button>
+          </div>
+          {selfEmployment.length === 0 ? (
+            <p className="text-sm text-ink/45">Freelance or business income (Anlage S / EÜR).</p>
+          ) : (
+            <Ledger>
+              {selfEmployment.map((s, i) => {
+                const netCents = s.gross_revenue_cents - s.deductible_expenses_cents;
+                return (
+                  <LedgerLine
+                    key={s.id}
+                    label={s.business_name}
+                    value={formatCents(netCents)}
+                    tone={netCents >= 0 ? "positive" : "negative"}
+                    delay={i * 60}
+                  />
+                );
+              })}
+            </Ledger>
+          )}
+        </section>
+
+        <KinderfreibetragSection filing={filing} token={token} onUpdated={setFiling} />
+
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
               Calculation
             </h2>
             <Button onClick={handleCalculate} disabled={!canCalculate || isCalculating}>
@@ -156,11 +277,29 @@ export default function FilingDetailPage() {
             </Button>
           </div>
           {!canCalculate ? (
-            <p className="text-sm text-ink/45">Add at least one wage tax certificate first.</p>
+            <p className="text-sm text-ink/45">
+              Add at least one source of income first — wage, capital, rental, or
+              self-employment.
+            </p>
           ) : (
             isCalculated && (
               <Card className="border-ink/15">
                 <Ledger className="border-none py-0">
+                  {filing.net_rental_income_cents !== null && filing.net_rental_income_cents !== 0 && (
+                    <LedgerLine
+                      label="Net rental income"
+                      value={formatCents(filing.net_rental_income_cents)}
+                      tone={filing.net_rental_income_cents >= 0 ? "default" : "negative"}
+                    />
+                  )}
+                  {filing.net_self_employment_income_cents !== null &&
+                    filing.net_self_employment_income_cents !== 0 && (
+                      <LedgerLine
+                        label="Net self-employment income"
+                        value={formatCents(filing.net_self_employment_income_cents)}
+                        tone={filing.net_self_employment_income_cents >= 0 ? "default" : "negative"}
+                      />
+                    )}
                   <LedgerLine label="Taxable income (zvE)" value={formatCents(filing.taxable_income_cents)} />
                   <LedgerLine label="Income tax" value={formatCents(filing.income_tax_cents)} />
                   <LedgerLine
@@ -170,10 +309,23 @@ export default function FilingDetailPage() {
                   <LedgerLine label="Kirchensteuer" value={formatCents(filing.church_tax_cents)} />
                   {filing.capital_gains_tax_cents !== null && filing.capital_gains_tax_cents > 0 && (
                     <LedgerLine
-                      label="Capital gains tax"
+                      label="Capital gains tax (Abgeltungsteuer)"
                       value={formatCents(filing.capital_gains_tax_cents)}
                     />
                   )}
+                  {filing.capital_gains_soli_cents !== null && filing.capital_gains_soli_cents > 0 && (
+                    <LedgerLine
+                      label="Soli on capital gains"
+                      value={formatCents(filing.capital_gains_soli_cents)}
+                    />
+                  )}
+                  {filing.capital_gains_church_tax_cents !== null &&
+                    filing.capital_gains_church_tax_cents > 0 && (
+                      <LedgerLine
+                        label="Kirchensteuer on capital gains"
+                        value={formatCents(filing.capital_gains_church_tax_cents)}
+                      />
+                    )}
                 </Ledger>
                 <div className="mt-2 flex items-baseline justify-between border-t border-ink/15 pt-4">
                   <span className="font-display text-base font-medium text-ink">
@@ -232,5 +384,82 @@ export default function FilingDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function KinderfreibetragSection({
+  filing,
+  token,
+  onUpdated,
+}: {
+  filing: TaxFiling;
+  token: string;
+  onUpdated: (filing: TaxFiling) => void;
+}) {
+  const [numberOfChildren, setNumberOfChildren] = useState(String(filing.number_of_children));
+  const [kindergeldReceived, setKindergeldReceived] = useState(
+    (filing.kindergeld_received_cents / 100).toFixed(2),
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSave() {
+    setIsSaving(true);
+    setError(null);
+    try {
+      const updated = await updateTaxFiling(token, filing.id, {
+        number_of_children: Number(numberOfChildren) || 0,
+        kindergeld_received_cents: eurosToCents(kindergeldReceived || "0"),
+      });
+      onUpdated(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save this.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <section>
+      <h2 className="mb-3 font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+        Children
+      </h2>
+      {error && <ErrorBanner message={error} />}
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <Label htmlFor="number_of_children">Number of children</Label>
+          <Input
+            id="number_of_children"
+            type="number"
+            min="0"
+            value={numberOfChildren}
+            onChange={(e) => setNumberOfChildren(e.target.value)}
+            className="w-24"
+          />
+        </div>
+        <div>
+          <Label htmlFor="kindergeld_received">Kindergeld received this year, €</Label>
+          <Input
+            id="kindergeld_received"
+            type="number"
+            step="0.01"
+            min="0"
+            value={kindergeldReceived}
+            onChange={(e) => setKindergeldReceived(e.target.value)}
+            className="w-36"
+          />
+        </div>
+        <Button onClick={handleSave} disabled={isSaving} variant="secondary">
+          {isSaving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+      {filing.kinderfreibetrag_applied !== null && (
+        <p className="mt-2.5 text-xs text-ink/40">
+          {filing.kinderfreibetrag_applied
+            ? `Günstigerprüfung: the Kinderfreibetrag (${formatCents(filing.kinderfreibetrag_total_cents ?? 0)}) worked out better than keeping the Kindergeld you received.`
+            : "Günstigerprüfung: keeping the Kindergeld you already received worked out better than the Kinderfreibetrag."}
+        </p>
+      )}
+    </section>
   );
 }
