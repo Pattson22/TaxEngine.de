@@ -15,7 +15,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { getCurrentUser } from "./api";
+import { ApiError, getCurrentUser } from "./api";
 import type { User } from "./types";
 
 const TOKEN_STORAGE_KEY = "taxengine_token";
@@ -40,11 +40,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const currentUser = await getCurrentUser(activeToken);
       setUser(currentUser);
-    } catch {
-      // Token expired/invalid -- drop it rather than leaving the app in a
-      // half-authenticated state.
-      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-      setToken(null);
+    } catch (err) {
+      // Only a confirmed 401 means the token itself is invalid/expired --
+      // drop it rather than leaving the app in a half-authenticated state.
+      // Anything else (network error, backend temporarily unreachable,
+      // ...) is NOT proof the session is dead, so the token stays in
+      // localStorage and a later retry (refreshUser, a page reload) can
+      // recover it instead of forcing a needless re-login.
+      if (err instanceof ApiError && err.status === 401) {
+        window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+        setToken(null);
+      }
       setUser(null);
     }
   }
