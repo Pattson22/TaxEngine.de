@@ -1,26 +1,82 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+  Design system: "Der Beleg" (the receipt/statement).
+  Tax filing is fundamentally a document with exact figures — a ledger,
+  not a chat app. Every visual decision below serves that: ink + muted
+  paper (not warm cream), a brass accent standing in for currency/an
+  official seal, and a hard split between sage (money coming to you) and
+  clay (money you owe) used consistently everywhere an amount appears.
+  Figures are always set in the mono face with tabular numerals so columns
+  of Euro amounts actually line up, the way a real Finanzamt form or bank
+  statement would set them.
+*/
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@theme {
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", monospace;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-ink: #14172a;
+  --color-ink-soft: #262b47;
+  --color-paper: #eeefea;
+  --color-paper-dim: #e2e2db;
+  --color-paper-line: #d6d3c8;
+  --color-brass: #ad802a;
+  --color-brass-soft: #d8b876;
+  --color-sage: #3d6350;
+  --color-sage-soft: #e4ebe6;
+  --color-clay: #9c4a3c;
+  --color-clay-soft: #f1e3df;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+* {
+  border-color: var(--color-paper-line);
+}
+
+::selection {
+  background: var(--color-brass-soft);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brass);
+  outline-offset: 2px;
+}
+
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise-in {
+  animation: rise-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }

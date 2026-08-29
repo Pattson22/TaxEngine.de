@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { register } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { Button, Card, ErrorBanner, Input, Label, PageHeading, Select } from "@/components/ui";
+import { Button, Card, ErrorBanner, Eyebrow, Input, Label, PageHeading, Select } from "@/components/ui";
 import type { FederalState } from "@/lib/types";
 
 const FEDERAL_STATES: FederalState[] = [
@@ -58,11 +58,12 @@ export default function RegisterPage() {
 
   return (
     <div className="mx-auto max-w-md px-6 py-16">
-      <PageHeading title="Create your account" subtitle="Free to estimate. Pay only when you file." />
+      <Eyebrow>Neu hier — new account</Eyebrow>
+      <PageHeading title="Set up your return" subtitle="Free to estimate. Pay only when you file." />
       <Card>
         {error && <ErrorBanner message={error} />}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="first_name">First name</Label>
               <Input id="first_name" name="first_name" required />
@@ -79,13 +80,13 @@ export default function RegisterPage() {
           <div>
             <Label htmlFor="password">Password</Label>
             <Input id="password" name="password" type="password" minLength={12} required />
-            <p className="mt-1 text-xs text-slate-500">Minimum 12 characters.</p>
+            <p className="mt-1.5 text-xs text-ink/40">At least 12 characters.</p>
           </div>
           <div>
             <Label htmlFor="residence_state">State (Bundesland)</Label>
             <Select id="residence_state" name="residence_state" required defaultValue="">
               <option value="" disabled>
-                Select your state
+                Where do you live?
               </option>
               {FEDERAL_STATES.map((state) => (
                 <option key={state} value={state}>
@@ -94,12 +95,12 @@ export default function RegisterPage() {
               ))}
             </Select>
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" name="is_joint_assessment" className="rounded border-slate-300" />
+          <label className="flex items-start gap-2.5 pt-1 text-sm text-ink/60">
+            <input type="checkbox" name="is_joint_assessment" className="mt-0.5 accent-brass" />
             I&apos;m filing jointly with my spouse (Zusammenveranlagung)
           </label>
-          <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? "Creating account…" : "Create account"}
+          <Button type="submit" disabled={isSubmitting} className="mt-2 w-full">
+            {isSubmitting ? "Setting up…" : "Create account"}
           </Button>
         </form>
       </Card>

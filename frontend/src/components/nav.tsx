@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { Button } from "./ui";
 
 export function Nav() {
   const { user, logout } = useAuth();
@@ -15,29 +14,35 @@ export function Nav() {
   }
 
   return (
-    <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        <Link href="/" className="text-lg font-semibold text-slate-900">
-          TaxEngine<span className="text-emerald-600">.de</span>
+    <header className="border-b border-ink/10 bg-paper">
+      <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
+        <Link href="/" className="font-display text-[17px] font-medium tracking-tight text-ink">
+          TaxEngine <span className="text-brass">·</span> de
         </Link>
-        <nav className="flex items-center gap-4 text-sm">
+        <nav className="flex items-center gap-6 text-sm">
           {user ? (
             <>
-              <Link href="/dashboard" className="text-slate-600 hover:text-slate-900">
-                Dashboard
+              <Link href="/dashboard" className="text-ink/60 transition-colors hover:text-ink">
+                Your returns
               </Link>
-              <span className="text-slate-400">{user.email}</span>
-              <Button variant="secondary" onClick={handleLogout}>
+              <span className="hidden text-ink/35 sm:inline">{user.email}</span>
+              <button
+                onClick={handleLogout}
+                className="border-b border-transparent text-ink/60 transition-colors hover:border-ink/30 hover:text-ink"
+              >
                 Log out
-              </Button>
+              </button>
             </>
           ) : (
             <>
-              <Link href="/login" className="text-slate-600 hover:text-slate-900">
+              <Link href="/login" className="text-ink/60 transition-colors hover:text-ink">
                 Log in
               </Link>
-              <Link href="/register">
-                <Button>Get started</Button>
+              <Link
+                href="/register"
+                className="border border-ink/20 px-4 py-2 text-ink transition-colors hover:border-ink hover:bg-ink hover:text-paper"
+              >
+                Start your return
               </Link>
             </>
           )}

@@ -7,7 +7,7 @@ import { createPaymentIntent } from "@/lib/api";
 import { useRequireAuth } from "@/lib/use-require-auth";
 import { getStripe } from "@/lib/stripe";
 import { formatCents } from "@/lib/money";
-import { Button, Card, ErrorBanner, PageHeading } from "@/components/ui";
+import { Button, Card, ErrorBanner, Eyebrow, PageHeading } from "@/components/ui";
 
 export default function PayFilingPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,13 +23,14 @@ export default function PayFilingPage() {
         setClientSecret(intent.client_secret);
         setAmountCents(intent.amount_cents);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to start payment."));
+      .catch((err) => setError(err instanceof Error ? err.message : "Couldn't start the payment."));
   }, [token, id]);
 
   if (authLoading || !token) return null;
 
   return (
-    <div className="mx-auto max-w-md px-6 py-12">
+    <div className="mx-auto max-w-md px-6 py-14">
+      <Eyebrow>Bearbeitungsgebühr</Eyebrow>
       <PageHeading
         title="Pay the processing fee"
         subtitle={amountCents !== null ? `Flat fee: ${formatCents(amountCents)}` : undefined}
@@ -41,7 +42,7 @@ export default function PayFilingPage() {
             <CheckoutForm filingId={id} />
           </Elements>
         ) : (
-          !error && <p className="text-sm text-slate-500">Preparing payment…</p>
+          !error && <p className="text-sm text-ink/40">Preparing payment…</p>
         )}
       </Card>
     </div>
@@ -81,15 +82,15 @@ function CheckoutForm({ filingId }: { filingId: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {error && <ErrorBanner message={error} />}
       <PaymentElement />
       <Button type="submit" disabled={!stripe || isSubmitting} className="w-full">
         {isSubmitting ? "Processing…" : "Pay now"}
       </Button>
-      <p className="text-xs text-slate-500">
-        Your filing updates to &quot;fee paid&quot; automatically once Stripe confirms the
-        charge via a verified webhook — this may take a few seconds after payment.
+      <p className="text-xs text-ink/40">
+        Your return updates to &quot;fee paid&quot; automatically once Stripe confirms the
+        charge — this can take a few seconds.
       </p>
     </form>
   );

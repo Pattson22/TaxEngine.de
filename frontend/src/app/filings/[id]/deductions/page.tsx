@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { createDeduction, getTaxFiling } from "@/lib/api";
 import { useRequireAuth } from "@/lib/use-require-auth";
 import { eurosToCents } from "@/lib/money";
-import { Button, Card, ErrorBanner, Input, Label, PageHeading, Select } from "@/components/ui";
+import { Button, Card, ErrorBanner, Eyebrow, Input, Label, PageHeading, Select } from "@/components/ui";
 import type { DeductionCategory } from "@/lib/types";
 
 const CATEGORIES: { value: DeductionCategory; label: string }[] = [
@@ -59,7 +59,7 @@ export default function AddDeductionPage() {
       });
       router.push(`/filings/${id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save deduction.");
+      setError(err instanceof Error ? err.message : "Couldn't save this deduction.");
     } finally {
       setIsSubmitting(false);
     }
@@ -68,11 +68,12 @@ export default function AddDeductionPage() {
   if (authLoading || !token) return null;
 
   return (
-    <div className="mx-auto max-w-md px-6 py-12">
+    <div className="mx-auto max-w-md px-6 py-14">
+      <Eyebrow>Werbungskosten & Sonderausgaben</Eyebrow>
       <PageHeading title="Add a deduction" />
       <Card>
         {error && <ErrorBanner message={error} />}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <Label htmlFor="category">Category</Label>
             <Select
@@ -90,7 +91,7 @@ export default function AddDeductionPage() {
 
           <CategoryFields category={category} />
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 pt-2">
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Saving…" : "Save"}
             </Button>

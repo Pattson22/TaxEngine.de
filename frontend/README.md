@@ -32,7 +32,8 @@ src/
 │   ├── money.ts             Cents <-> EUR formatting/parsing
 │   └── stripe.ts            Stripe.js singleton loader
 ├── components/
-│   ├── ui.tsx               Button/Input/Select/Card/StatusBadge/etc.
+│   ├── ui.tsx               Button/Input/Select/Card/StatusStamp/etc.
+│   ├── ledger.tsx            Ledger/LedgerLine/CountUpEuro — see Design below
 │   └── nav.tsx               Top nav, auth-aware
 └── app/
     ├── page.tsx              Landing page
@@ -44,6 +45,33 @@ src/
         ├── deductions/         Add a deduction (category-aware form)
         └── pay/                 Stripe Elements checkout
 ```
+
+## Design
+
+The visual language is built around "Der Beleg" — the receipt/statement —
+since the product's whole job is turning a stack of paperwork into a
+trustworthy number. A few deliberate choices, not the default AI-generated
+look (no cream+serif, no near-black+neon, no newspaper hairlines):
+
+- **Colors** (`src/app/globals.css` `@theme`): ink navy (`--color-ink`) on
+  a cool muted paper (`--color-paper`, #EEEFEA — not the cream #F4F1EA
+  cliché), brass as the single accent, sage for money owed *to* you, clay
+  for money you owe.
+- **Type**: Space Grotesk for display/headlines, IBM Plex Sans for body
+  and UI, IBM Plex Mono for every tabular figure (`.tabular` utility —
+  `font-variant-numeric: tabular-nums`). Money is never set in the body
+  face.
+- **Signature component**: `Ledger`/`LedgerLine` (`src/components/ledger.tsx`)
+  — a dotted-leader receipt line (label … dots … amount), used identically
+  for the marketing demo on the landing page and for real calculation
+  results on the filing detail page. Same component, same data shape,
+  deliberately not two implementations.
+- **`StatusStamp`** (`src/components/ui.tsx`) — a rotated, double-bordered
+  "official stamp" for filing status, standing in for a generic colored
+  pill badge.
+- **"Zeile"** — the landing page's 3-step process section is numbered the
+  way a German tax form numbers its lines, not with generic numbered
+  circles.
 
 ## Known simplifications
 

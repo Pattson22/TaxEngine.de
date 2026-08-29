@@ -1,32 +1,40 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { Nav } from "@/components/nav";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
   subsets: ["latin"],
+  weight: ["500", "600", "700"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
+
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
-  title: "TaxEngine.de — German tax returns, made simple",
+  title: "TaxEngine.de — Know your refund before you file it",
   description:
-    "Free tax estimate, flat €34.90 to file. Enter your income and deductions, see your refund, submit to the Finanzamt.",
+    "Itemize your German tax return for free and see the exact number before you pay anything. €34,90 flat, only when you file.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${spaceGrotesk.variable} ${plexSans.variable} ${plexMono.variable} h-full`}
     >
-      <body className="min-h-full flex flex-col bg-slate-50">
+      <body className="flex min-h-full flex-col bg-paper text-ink antialiased">
         <AuthProvider>
           <Nav />
           <main className="flex-1">{children}</main>

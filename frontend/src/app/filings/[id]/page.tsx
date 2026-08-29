@@ -10,7 +10,8 @@ import {
 } from "@/lib/api";
 import { useRequireAuth } from "@/lib/use-require-auth";
 import { formatCents } from "@/lib/money";
-import { Button, Card, ErrorBanner, PageHeading, StatusBadge } from "@/components/ui";
+import { Button, Card, ErrorBanner, Eyebrow, StatusStamp } from "@/components/ui";
+import { Ledger, LedgerLine } from "@/components/ledger";
 import type { Deduction, TaxFiling, WageTaxCertificate } from "@/lib/types";
 
 export default function FilingDetailPage() {
@@ -39,14 +40,10 @@ export default function FilingDetailPage() {
 
   useEffect(() => {
     if (!token) return;
-    // Reset to loading on every (token, id) change -- App Router does not
-    // remount this component when navigating between two filing detail
-    // URLs, so without this the previous filing's data would flash before
-    // the new fetch resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     loadAll()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load filing."))
+      .catch((err) => setError(err instanceof Error ? err.message : "Couldn't load this return."))
       .finally(() => setIsLoading(false));
   }, [token, loadAll]);
 
@@ -58,166 +55,182 @@ export default function FilingDetailPage() {
       const updated = await calculateTaxFiling(token, id);
       setFiling(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Calculation failed.");
+      setError(err instanceof Error ? err.message : "Couldn't calculate this return.");
     } finally {
       setIsCalculating(false);
     }
   }
 
   if (authLoading || !token || isLoading || !filing) {
-    return <div className="mx-auto max-w-3xl px-6 py-12 text-sm text-slate-500">Loading…</div>;
+    return <div className="mx-auto max-w-3xl px-6 py-14 text-sm text-ink/40">Loading…</div>;
   }
 
   const totalGrossWage = wageCerts.reduce((sum, c) => sum + c.gross_wage_cents, 0);
   const canCalculate = wageCerts.length > 0;
   const isCalculated = filing.status !== "DRAFT";
+  const refundIsPositive = (filing.estimated_refund_cents ?? 0) >= 0;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-12">
-      <div className="flex items-center gap-3">
-        <PageHeading title={`Tax year ${filing.tax_year}`} />
-        <div className="mb-8">
-          <StatusBadge status={filing.status} />
+    <div className="mx-auto max-w-3xl px-6 py-14">
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <Eyebrow>Steuererklärung</Eyebrow>
+          <h1 className="font-display text-[28px] leading-tight font-medium text-ink">
+            Tax year {filing.tax_year}
+          </h1>
         </div>
+        <StatusStamp status={filing.status} />
       </div>
 
       {error && <ErrorBanner message={error} />}
 
-      <div className="space-y-6">
-        <Card>
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-slate-900">Wage income</h2>
-            <Button
-              variant="secondary"
+      <div className="space-y-10">
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+              Wage income
+            </h2>
+            <button
               onClick={() => router.push(`/filings/${id}/wage-income`)}
+              className="border-b border-brass/40 text-sm text-brass transition-colors hover:border-brass"
             >
               + Add employer
-            </Button>
+            </button>
           </div>
           {wageCerts.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">
-              No wage tax certificates yet. Add your Lohnsteuerbescheinigung to get started.
+            <p className="text-sm text-ink/45">
+              Add your Lohnsteuerbescheinigung to get started.
             </p>
           ) : (
-            <ul className="mt-3 divide-y divide-slate-100">
-              {wageCerts.map((cert) => (
-                <li key={cert.id} className="flex justify-between py-2 text-sm">
-                  <span className="text-slate-700">{cert.employer_name}</span>
-                  <span className="font-medium text-slate-900">
-                    {formatCents(cert.gross_wage_cents)}
-                  </span>
-                </li>
+            <Ledger>
+              {wageCerts.map((cert, i) => (
+                <LedgerLine
+                  key={cert.id}
+                  label={cert.employer_name}
+                  value={formatCents(cert.gross_wage_cents)}
+                  delay={i * 60}
+                />
               ))}
-              <li className="flex justify-between pt-2 text-sm font-semibold">
-                <span>Total gross</span>
-                <span>{formatCents(totalGrossWage)}</span>
-              </li>
-            </ul>
+              <LedgerLine label="Total gross" value={formatCents(totalGrossWage)} tone="total" />
+            </Ledger>
           )}
-        </Card>
+        </section>
 
-        <Card>
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-slate-900">Deductions</h2>
-            <Button variant="secondary" onClick={() => router.push(`/filings/${id}/deductions`)}>
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+              Deductions
+            </h2>
+            <button
+              onClick={() => router.push(`/filings/${id}/deductions`)}
+              className="border-b border-brass/40 text-sm text-brass transition-colors hover:border-brass"
+            >
               + Add deduction
-            </Button>
+            </button>
           </div>
           {deductions.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">
-              No deductions yet — commute, home office, donations, and more can all lower
-              your taxable income.
+            <p className="text-sm text-ink/45">
+              Commute, home office, donations, childcare — add anything that applies.
             </p>
           ) : (
-            <ul className="mt-3 divide-y divide-slate-100">
-              {deductions.map((d) => (
-                <li key={d.id} className="flex justify-between py-2 text-sm">
-                  <span className="text-slate-700">{d.category.replaceAll("_", " ")}</span>
-                  <span className="font-medium text-slate-900">
-                    {d.amount_claimed_cents !== null ? formatCents(d.amount_claimed_cents) : "computed"}
-                  </span>
-                </li>
+            <Ledger>
+              {deductions.map((d, i) => (
+                <LedgerLine
+                  key={d.id}
+                  label={d.category.replaceAll("_", " ").toLowerCase()}
+                  value={d.amount_claimed_cents !== null ? formatCents(d.amount_claimed_cents) : "computed"}
+                  delay={i * 60}
+                />
               ))}
-            </ul>
+            </Ledger>
           )}
-        </Card>
+        </section>
 
-        <Card>
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-slate-900">Calculation</h2>
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+              Calculation
+            </h2>
             <Button onClick={handleCalculate} disabled={!canCalculate || isCalculating}>
               {isCalculating ? "Calculating…" : isCalculated ? "Recalculate" : "Calculate refund"}
             </Button>
           </div>
-          {!canCalculate && (
-            <p className="mt-3 text-sm text-slate-500">
-              Add at least one wage tax certificate before calculating.
-            </p>
+          {!canCalculate ? (
+            <p className="text-sm text-ink/45">Add at least one wage tax certificate first.</p>
+          ) : (
+            isCalculated && (
+              <Card className="border-ink/15">
+                <Ledger className="border-none py-0">
+                  <LedgerLine label="Taxable income (zvE)" value={formatCents(filing.taxable_income_cents)} />
+                  <LedgerLine label="Income tax" value={formatCents(filing.income_tax_cents)} />
+                  <LedgerLine
+                    label="Solidaritätszuschlag"
+                    value={formatCents(filing.solidarity_surcharge_cents)}
+                  />
+                  <LedgerLine label="Kirchensteuer" value={formatCents(filing.church_tax_cents)} />
+                  {filing.capital_gains_tax_cents !== null && filing.capital_gains_tax_cents > 0 && (
+                    <LedgerLine
+                      label="Capital gains tax"
+                      value={formatCents(filing.capital_gains_tax_cents)}
+                    />
+                  )}
+                </Ledger>
+                <div className="mt-2 flex items-baseline justify-between border-t border-ink/15 pt-4">
+                  <span className="font-display text-base font-medium text-ink">
+                    {refundIsPositive ? "Estimated refund" : "You'd owe"}
+                  </span>
+                  <span
+                    className={`tabular font-display text-2xl font-medium ${refundIsPositive ? "text-sage" : "text-clay"}`}
+                  >
+                    {formatCents(
+                      refundIsPositive
+                        ? filing.estimated_refund_cents
+                        : Math.abs(filing.estimated_refund_cents ?? 0),
+                    )}
+                  </span>
+                </div>
+              </Card>
+            )
           )}
-          {isCalculated && (
-            <dl className="mt-4 space-y-2 text-sm">
-              <Row label="Taxable income (zvE)" value={formatCents(filing.taxable_income_cents)} />
-              <Row label="Income tax" value={formatCents(filing.income_tax_cents)} />
-              <Row label="Solidaritätszuschlag" value={formatCents(filing.solidarity_surcharge_cents)} />
-              <Row label="Kirchensteuer" value={formatCents(filing.church_tax_cents)} />
-              {filing.capital_gains_tax_cents !== null && filing.capital_gains_tax_cents > 0 && (
-                <Row label="Capital gains tax" value={formatCents(filing.capital_gains_tax_cents)} />
-              )}
-              <div className="my-2 border-t border-slate-200" />
-              <Row
-                label="Estimated refund"
-                value={formatCents(filing.estimated_refund_cents)}
-                emphasize
-              />
-            </dl>
-          )}
-        </Card>
+        </section>
 
         {isCalculated && filing.status === "CALCULATED" && (
-          <Card>
-            <h2 className="font-semibold text-slate-900">Ready to file</h2>
-            <p className="mt-2 text-sm text-slate-600">
-              Pay the flat {formatCents(filing.processing_fee_cents)} processing fee to submit
-              your return to the Finanzamt.
+          <section className="border border-brass/30 bg-brass-soft/15 p-6">
+            <h2 className="font-display text-base font-medium text-ink">Ready to file</h2>
+            <p className="mt-1.5 text-sm text-ink/60">
+              Pay the flat {formatCents(filing.processing_fee_cents)} fee and we&apos;ll submit
+              this to the Finanzamt.
             </p>
             <Button className="mt-4" onClick={() => router.push(`/filings/${id}/pay`)}>
               Continue to payment
             </Button>
-          </Card>
+          </section>
         )}
 
-        {(filing.status === "FEE_PAID" ||
-          filing.status === "SUBMITTED" ||
-          filing.status === "ACCEPTED" ||
-          filing.status === "REJECTED") && (
-          <Card>
-            <h2 className="font-semibold text-slate-900">Submission</h2>
+        {["FEE_PAID", "SUBMITTED", "ACCEPTED", "REJECTED"].includes(filing.status) && (
+          <section className="border-t border-ink/10 pt-6">
+            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+              Submission
+            </h2>
             {filing.elster_transfer_ticket ? (
-              <div className="mt-2 text-sm text-slate-600">
-                <p>Transfer ticket: {filing.elster_transfer_ticket}</p>
-                {filing.elster_accepted_at && <p className="mt-1 text-emerald-700">Accepted by the Finanzamt.</p>}
+              <div className="mt-3 text-sm text-ink/60">
+                <p className="tabular">Transfer ticket: {filing.elster_transfer_ticket}</p>
+                {filing.elster_accepted_at && (
+                  <p className="mt-1.5 text-sage">Accepted by the Finanzamt.</p>
+                )}
                 {filing.elster_rejection_reason && (
-                  <p className="mt-1 text-red-700">{filing.elster_rejection_reason}</p>
+                  <p className="mt-1.5 text-clay">{filing.elster_rejection_reason}</p>
                 )}
               </div>
             ) : (
-              <p className="mt-2 text-sm text-slate-500">
-                Fee paid — ready to submit. (Submission uses a test integration until a real
-                ELSTER developer certificate is in place — see docs/ELSTER_ERIC_INTEGRATION.md.)
+              <p className="mt-3 text-sm text-ink/45">
+                Fee paid — ready to submit. (Uses a test integration until a real ELSTER
+                developer certificate is in place.)
               </p>
             )}
-          </Card>
+          </section>
         )}
       </div>
-    </div>
-  );
-}
-
-function Row({ label, value, emphasize = false }: { label: string; value: string; emphasize?: boolean }) {
-  return (
-    <div className={`flex justify-between ${emphasize ? "text-base font-semibold text-emerald-700" : "text-slate-600"}`}>
-      <dt>{label}</dt>
-      <dd>{value}</dd>
     </div>
   );
 }

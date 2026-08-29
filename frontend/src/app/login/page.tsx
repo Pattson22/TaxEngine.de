@@ -34,10 +34,10 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto max-w-md px-6 py-16">
-      <PageHeading title="Log in" />
+      <PageHeading title="Welcome back" />
       <Card>
         {error && <ErrorBanner message={error} />}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <Label htmlFor="email">Email</Label>
             <Input id="email" name="email" type="email" required />
@@ -46,7 +46,7 @@ export default function LoginPage() {
             <Label htmlFor="password">Password</Label>
             <Input id="password" name="password" type="password" required />
           </div>
-          <Button type="submit" disabled={isSubmitting} className="w-full">
+          <Button type="submit" disabled={isSubmitting} className="mt-2 w-full">
             {isSubmitting ? "Logging in…" : "Log in"}
           </Button>
         </form>

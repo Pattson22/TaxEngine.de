@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { createWageTaxCertificate, getTaxFiling } from "@/lib/api";
 import { useRequireAuth } from "@/lib/use-require-auth";
 import { eurosToCents } from "@/lib/money";
-import { Button, Card, ErrorBanner, Input, Label, PageHeading } from "@/components/ui";
+import { Button, Card, ErrorBanner, Eyebrow, Input, Label, PageHeading } from "@/components/ui";
 
 export default function AddWageIncomePage() {
   const { id } = useParams<{ id: string }>();
@@ -33,7 +33,7 @@ export default function AddWageIncomePage() {
       });
       router.push(`/filings/${id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save wage income.");
+      setError(err instanceof Error ? err.message : "Couldn't save this employer.");
     } finally {
       setIsSubmitting(false);
     }
@@ -42,14 +42,12 @@ export default function AddWageIncomePage() {
   if (authLoading || !token) return null;
 
   return (
-    <div className="mx-auto max-w-md px-6 py-12">
-      <PageHeading
-        title="Add wage income"
-        subtitle="From your Lohnsteuerbescheinigung (electronic wage tax certificate)."
-      />
+    <div className="mx-auto max-w-md px-6 py-14">
+      <Eyebrow>Lohnsteuerbescheinigung</Eyebrow>
+      <PageHeading title="Add an employer" subtitle="From your electronic wage tax certificate." />
       <Card>
         {error && <ErrorBanner message={error} />}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <Label htmlFor="employer_name">Employer name</Label>
             <Input id="employer_name" name="employer_name" required />
@@ -70,7 +68,7 @@ export default function AddWageIncomePage() {
             <Label htmlFor="church_tax_withheld">Church tax withheld, €</Label>
             <Input id="church_tax_withheld" name="church_tax_withheld" type="number" step="0.01" min="0" />
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 pt-2">
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Saving…" : "Save"}
             </Button>

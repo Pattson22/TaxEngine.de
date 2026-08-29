@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createTaxFiling, listTaxFilings } from "@/lib/api";
 import { useRequireAuth } from "@/lib/use-require-auth";
 import { formatCents } from "@/lib/money";
-import { Button, Card, ErrorBanner, PageHeading, StatusBadge } from "@/components/ui";
+import { Button, Card, ErrorBanner, Eyebrow, PageHeading, StatusStamp } from "@/components/ui";
 import type { TaxFiling } from "@/lib/types";
 
 const CURRENT_TAX_YEAR = 2024; // only tax_year=2024 has reviewed backend constants right now
@@ -22,7 +22,7 @@ export default function DashboardPage() {
     if (!token) return;
     listTaxFilings(token)
       .then(setFilings)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load filings."))
+      .catch((err) => setError(err instanceof Error ? err.message : "Couldn't load your returns."))
       .finally(() => setIsLoading(false));
   }, [token]);
 
@@ -34,7 +34,7 @@ export default function DashboardPage() {
       const filing = await createTaxFiling(token, CURRENT_TAX_YEAR);
       router.push(`/filings/${filing.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create filing.");
+      setError(err instanceof Error ? err.message : "Couldn't start your return.");
     } finally {
       setIsCreating(false);
     }
@@ -43,12 +43,15 @@ export default function DashboardPage() {
   if (authLoading || !token) return null;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-12">
-      <div className="flex items-center justify-between">
-        <PageHeading title="Your tax filings" />
+    <div className="mx-auto max-w-3xl px-6 py-14">
+      <div className="flex items-end justify-between">
+        <div>
+          <Eyebrow>Your account</Eyebrow>
+          <PageHeading title="Your returns" />
+        </div>
         {!filings.some((f) => f.tax_year === CURRENT_TAX_YEAR) && (
-          <Button onClick={handleCreateFiling} disabled={isCreating}>
-            {isCreating ? "Creating…" : `Start ${CURRENT_TAX_YEAR} return`}
+          <Button onClick={handleCreateFiling} disabled={isCreating} className="mb-8">
+            {isCreating ? "Starting…" : `Start ${CURRENT_TAX_YEAR}`}
           </Button>
         )}
       </div>
@@ -56,32 +59,40 @@ export default function DashboardPage() {
       {error && <ErrorBanner message={error} />}
 
       {isLoading ? (
-        <p className="text-sm text-slate-500">Loading…</p>
+        <p className="text-sm text-ink/40">Loading…</p>
       ) : filings.length === 0 ? (
-        <Card>
-          <p className="text-sm text-slate-600">
-            No filings yet. Start your {CURRENT_TAX_YEAR} return to get a free refund estimate.
+        <Card className="border-dashed">
+          <p className="text-sm text-ink/60">
+            Nothing here yet. Start your {CURRENT_TAX_YEAR} return to see what you get back —
+            it&apos;s free until you file.
           </p>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="border-t border-ink/10">
           {filings.map((filing) => (
-            <Card key={filing.id} className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-slate-900">Tax year {filing.tax_year}</span>
-                  <StatusBadge status={filing.status} />
-                </div>
-                <p className="mt-1 text-sm text-slate-500">
-                  {filing.estimated_refund_cents !== null
-                    ? `Estimated refund: ${formatCents(filing.estimated_refund_cents)}`
-                    : "Not yet calculated"}
-                </p>
+            <button
+              key={filing.id}
+              onClick={() => router.push(`/filings/${filing.id}`)}
+              className="flex w-full items-center justify-between border-b border-ink/10 py-5 text-left transition-colors hover:bg-ink/[0.03]"
+            >
+              <div className="flex items-center gap-4">
+                <span className="font-display text-lg font-medium text-ink">{filing.tax_year}</span>
+                <StatusStamp status={filing.status} />
               </div>
-              <Button variant="secondary" onClick={() => router.push(`/filings/${filing.id}`)}>
-                Open
-              </Button>
-            </Card>
+              <span
+                className={`tabular text-sm ${
+                  filing.estimated_refund_cents === null
+                    ? "text-ink/35"
+                    : filing.estimated_refund_cents >= 0
+                      ? "text-sage"
+                      : "text-clay"
+                }`}
+              >
+                {filing.estimated_refund_cents !== null
+                  ? formatCents(filing.estimated_refund_cents)
+                  : "Not yet calculated"}
+              </span>
+            </button>
           ))}
         </div>
       )}
