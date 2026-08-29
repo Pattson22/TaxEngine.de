@@ -129,6 +129,13 @@ export function calculateTaxFiling(token: string, filingId: string): Promise<Tax
   return request<TaxFiling>(`/tax-filings/${filingId}/calculate`, { method: "POST", token });
 }
 
+// Tax years the calculation engine has reviewed, published constants for
+// -- the single source of truth for the dashboard's year picker, so it
+// can never drift out of sync with the backend's tax_engine/constants.py.
+export function getSupportedTaxYears(): Promise<number[]> {
+  return request<number[]>("/tax-filings/supported-years");
+}
+
 export function createPaymentIntent(
   token: string,
   filingId: string,

@@ -13,7 +13,7 @@ from app.models.user import User
 from app.schemas.payment import PaymentIntentResponse
 from app.schemas.tax_filing import TaxFilingCreate, TaxFilingRead, TaxFilingUpdate
 from app.services.payment_service import PaymentError, create_payment_intent_for_filing
-from app.services.tax_calculation_service import calculate_tax_filing
+from app.services.tax_calculation_service import calculate_tax_filing, get_supported_tax_years
 
 router = APIRouter(prefix="/tax-filings", tags=["tax-filings"])
 
@@ -31,6 +31,16 @@ def create_tax_filing(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> TaxFiling:
+    supported_years = get_supported_tax_years()
+    if payload.tax_year not in supported_years:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"No verified tax constants available for tax_year={payload.tax_year}. "
+                f"Supported years: {supported_years}."
+            ),
+        )
+
     existing = (
         db.query(TaxFiling)
         .filter(TaxFiling.user_id == current_user.id, TaxFiling.tax_year == payload.tax_year)
@@ -59,6 +69,16 @@ def list_tax_filings(
         .order_by(TaxFiling.tax_year.desc())
         .all()
     )
+
+
+@router.get("/supported-years", response_model=list[int])
+def list_supported_tax_years() -> list[int]:
+    """Tax years the calculation engine has reviewed, published constants
+    for. The frontend's year picker sources its options from here so it
+    can never drift out of sync with tax_engine/constants.py. Registered
+    ahead of GET /{filing_id} so "supported-years" isn't swallowed as a
+    (invalid) filing_id path parameter."""
+    return get_supported_tax_years()
 
 
 @router.get("/{filing_id}", response_model=TaxFilingRead)

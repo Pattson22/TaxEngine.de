@@ -29,6 +29,7 @@ from app.schemas.deduction import (
 )
 from app.tax_engine.capital_gains import apply_sparer_pauschbetrag, calculate_kapitalertragsteuer
 from app.tax_engine.church_tax import apply_kirchensteuer_kappung, calculate_kirchensteuer
+from app.tax_engine.constants import SUPPORTED_TAX_YEARS
 from app.tax_engine.core import (
     DeductionLine,
     apply_pauschbetrag_or_actual,
@@ -57,6 +58,15 @@ class TaxCalculationError(ValueError):
     catch most of these — this is a defense-in-depth check so a malformed
     payload fails with a clear message here instead of a raw
     KeyError/TypeError surfacing from inside app.tax_engine."""
+
+
+def get_supported_tax_years() -> list[int]:
+    """Tax years with reviewed, published constants (tax_engine/constants.py),
+    sorted ascending. The single source of truth for which years the API
+    will accept a filing/calculation for -- both the create-filing
+    validation and the frontend's year picker read from this instead of
+    hard-coding a year, so a new year only ever needs adding in one place."""
+    return sorted(SUPPORTED_TAX_YEARS)
 
 
 # Werbungskosten (§9 EStG, reduce taxable income) vs. Sonderausgaben
