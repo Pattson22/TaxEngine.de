@@ -17,7 +17,7 @@ from app.services.payment_service import PaymentError, handle_stripe_webhook_eve
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
-@router.post("/stripe", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/stripe", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)) -> None:
     """Receives Stripe webhook events. Must read the RAW body (not a
     parsed JSON model) since signature verification is computed over the

@@ -62,7 +62,7 @@ def get_self_employment_statement(
     return _get_owned_statement_or_404(statement_id, current_user, db)
 
 
-@router.delete("/{statement_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{statement_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_self_employment_statement(
     statement_id: uuid.UUID,
     current_user: User = Depends(get_current_user),

@@ -55,7 +55,7 @@ def get_deduction(
     return _get_owned_deduction_or_404(deduction_id, current_user, db)
 
 
-@router.delete("/{deduction_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{deduction_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_deduction(
     deduction_id: uuid.UUID,
     current_user: User = Depends(get_current_user),

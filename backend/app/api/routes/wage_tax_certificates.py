@@ -57,7 +57,7 @@ def get_wage_tax_certificate(
     return _get_owned_certificate_or_404(certificate_id, current_user, db)
 
 
-@router.delete("/{certificate_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{certificate_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_wage_tax_certificate(
     certificate_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
