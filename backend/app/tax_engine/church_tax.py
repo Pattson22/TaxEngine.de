@@ -4,23 +4,19 @@ laws (Landeskirchensteuergesetze), collected by the Finanzamt alongside
 income tax on behalf of the registered religious body.
 
 *** SIMPLIFIED / PLACEHOLDER — see caveats below ***
-This module implements the common-case calculation: a flat percentage
-(8% in Bayern/Baden-Württemberg, 9% elsewhere) of the assessed income tax,
-for taxpayers who registered a church_tax_type other than NONE. Two
-real-world refinements are explicitly OUT OF SCOPE for this MVP module and
-would need to be added before this figure is transmitted to the Finanzamt:
+`calculate_kirchensteuer` implements the standard calculation: a flat
+percentage (8% in Bayern/Baden-Württemberg, 9% elsewhere) of the assessed
+income tax. `apply_kirchensteuer_kappung` layers Kappung (capping) on top
+of that — see its own docstring for the state-by-state rate table and its
+approximations. One real-world refinement remains explicitly OUT OF SCOPE:
 
-  1. Kappung (capping): several states cap Kirchensteuer at 2.75%-4% of
-     TAXABLE INCOME (not income tax) for high earners, if that produces a
-     lower result than the percentage-of-income-tax calculation — this
-     requires an explicit application (Kappungsantrag) in some states and
-     is applied automatically in others.
-  2. Kinderfreibetrag adjustment: the assessed-income-tax base used for
-     Kirchensteuer purposes is technically computed WITH the
-     Kinderfreibetrag applied even for taxpayers who received Kindergeld
-     instead (a quirk of how the base is defined) — since this MVP does
-     not yet model children/Kinderfreibetrag at all, that adjustment
-     cannot yet be applied and the plain assessed income tax is used as-is.
+  Kinderfreibetrag adjustment: the assessed-income-tax base used for
+  Kirchensteuer (and Soli) purposes is technically computed WITH the
+  Kinderfreibetrag applied even for taxpayers who came out ahead keeping
+  Kindergeld instead for income tax purposes (a quirk of how the base is
+  defined, §51a EStG / §3 SolZG). This module continues to use the
+  actually-assessed (post-Günstigerprüfung) income tax as its base — see
+  tax_engine/kinderfreibetrag.py's module docstring for the same caveat.
 """
 
 from __future__ import annotations
@@ -73,3 +69,68 @@ def calculate_kirchensteuer(
     church_tax_euro = (income_tax_euro * rate).quantize(Decimal("1"), rounding=ROUND_DOWN)
 
     return max(int(church_tax_euro) * 100, 0)
+
+
+def calculate_kirchensteuer_kappung_cap(
+    taxable_income_cents: int,
+    residence_state: FederalState,
+    tax_year: int = 2024,
+) -> int | None:
+    """Compute the Kappung ceiling (a percentage of TAXABLE INCOME, not
+    income tax) for a given state, or None if that state offers no Kappung
+    at all (Bayern) or isn't in the lookup table.
+
+    See `constants.TaxYearConstants.kirchensteuer_kappung_rates` for the
+    per-state rate table and its documented approximations (denomination-
+    level differences and Antrag-vs-automatic distinctions are not
+    modeled; the more conservative rate is used where a state publishes
+    more than one).
+
+    Raises:
+        InvalidIncomeError: if taxable_income_cents is negative.
+    """
+    if taxable_income_cents < 0:
+        raise InvalidIncomeError("taxable_income_cents cannot be negative.")
+
+    constants = get_constants_for_year(tax_year)
+    rate = constants.kirchensteuer_kappung_rates.get(residence_state)
+    if rate is None:
+        return None
+
+    income_euro = Decimal(taxable_income_cents) / _CENTS_PER_EURO
+    cap_euro = (income_euro * rate).quantize(Decimal("1"), rounding=ROUND_DOWN)
+    return max(int(cap_euro) * 100, 0)
+
+
+def apply_kirchensteuer_kappung(
+    standard_kirchensteuer_cents: int,
+    taxable_income_cents: int,
+    residence_state: FederalState,
+    tax_year: int = 2024,
+) -> int:
+    """Cap Kirchensteuer at the state's Kappungssatz, if that ceiling is
+    lower than the standard percentage-of-income-tax amount.
+
+    Args:
+        standard_kirchensteuer_cents: output of calculate_kirchensteuer.
+        taxable_income_cents: zu versteuerndes Einkommen — the base the
+            Kappung percentage applies to (NOT income tax).
+        residence_state: determines whether/which Kappungssatz applies.
+        tax_year: which year's rates to apply.
+
+    Returns:
+        The lesser of the standard Kirchensteuer and the state's Kappung
+        ceiling — or the standard amount unchanged if the state offers no
+        Kappung.
+
+    Raises:
+        InvalidIncomeError: if either cents argument is negative.
+    """
+    if standard_kirchensteuer_cents < 0:
+        raise InvalidIncomeError("standard_kirchensteuer_cents cannot be negative.")
+
+    cap_cents = calculate_kirchensteuer_kappung_cap(taxable_income_cents, residence_state, tax_year)
+    if cap_cents is None:
+        return standard_kirchensteuer_cents
+
+    return min(standard_kirchensteuer_cents, cap_cents)

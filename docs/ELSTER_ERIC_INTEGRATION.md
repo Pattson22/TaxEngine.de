@@ -1,5 +1,19 @@
 # ELSTER / ERiC Integration Engine
 
+## Implementation status
+
+`backend/app/eric/` scaffolds everything below that CAN exist without a
+BZSt developer certificate: `xml_builder.py` (real XML generation, tested),
+`submission_service.py` (the full validate→submit→persist orchestration,
+wired to `POST /tax-filings/{id}/submit`), and `client.py`'s `EricClient`
+abstraction with a fully-working `StubEricClient` (always "succeeds", used
+for local dev/testing) plus a `NativeEricClient` that raises
+`NotImplementedError` with exact instructions for what completing it
+requires. The XML shape below `<Steuerfall>` is illustrative — the real
+Datenartenkatalog field names are BZSt-developer-only and not something
+this project has access to yet. See `xml_builder.py`'s docstring for the
+full caveat before this is ever pointed at a real ELSTER endpoint.
+
 ## What ERiC actually is (and why that shapes the architecture)
 
 ERiC (**E**lster **Ri**ch **C**lient) is a proprietary, closed-source

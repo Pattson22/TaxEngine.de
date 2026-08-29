@@ -1,0 +1,44 @@
+# Repo-wide ignores. frontend/ has its own .gitignore for Next.js-specific
+# patterns (node_modules, .next, etc.) -- this file covers the Python
+# backend and cross-cutting OS/editor/secret patterns everywhere else.
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# --- Testing / coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# --- Environment / secrets ---
+# .env.example files ARE meant to be committed -- only real .env files
+# (containing actual secrets) are ignored.
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.local.example
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log

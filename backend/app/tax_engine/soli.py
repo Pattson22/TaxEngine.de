@@ -76,3 +76,41 @@ def calculate_solidaritaetszuschlag(
     soli_euro_rounded = soli_euro.quantize(Decimal("1"), rounding=ROUND_DOWN)
 
     return max(int(soli_euro_rounded) * 100, 0)
+
+
+def calculate_solidaritaetszuschlag_on_capital_gains_tax(
+    kapitalertragsteuer_cents: int,
+    tax_year: int = 2024,
+) -> int:
+    """Compute Soli on Kapitalertragsteuer (capital gains withholding tax)
+    — a FLAT 5.5%, with NO Freigrenze/Milderungszone at all.
+
+    The exemption threshold implemented in `calculate_solidaritaetszuschlag`
+    above only applies to the assessed (veranlagte) income tax under the
+    progressive §32a tariff. Capital gains are taxed under the entirely
+    separate flat Abgeltungsteuer regime (§32d EStG), and Soli on that
+    withholding tax has no exemption threshold — it is 5.5% of whatever
+    Kapitalertragsteuer was withheld, from the first cent. Using the
+    regular-income-tax function here would incorrectly zero out Soli on
+    small capital gains.
+
+    Args:
+        kapitalertragsteuer_cents: output of
+            capital_gains.calculate_kapitalertragsteuer, in cents.
+        tax_year: which year's Soli rate to apply.
+
+    Returns:
+        Soli owed on the capital gains tax, in cents, rounded down to the
+        nearest full Euro.
+
+    Raises:
+        InvalidIncomeError: if kapitalertragsteuer_cents is negative.
+    """
+    if kapitalertragsteuer_cents < 0:
+        raise InvalidIncomeError("kapitalertragsteuer_cents cannot be negative.")
+
+    constants = get_constants_for_year(tax_year)
+    tax_euro = Decimal(kapitalertragsteuer_cents) / _CENTS_PER_EURO
+    soli_euro = (tax_euro * constants.soli_rate).quantize(Decimal("1"), rounding=ROUND_DOWN)
+
+    return max(int(soli_euro) * 100, 0)

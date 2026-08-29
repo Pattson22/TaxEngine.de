@@ -118,3 +118,24 @@ class TestCalculateTaxableIncome:
     def test_rejects_negative_other_deductions(self):
         with pytest.raises(InvalidIncomeError):
             calculate_taxable_income(1000, 0, other_deductions_cents=-1)
+
+    def test_positive_other_income_category_adds_to_taxable_income(self):
+        # 45,000 EUR wages + 4,000 EUR net rental income, no Werbungskosten.
+        assert (
+            calculate_taxable_income(45_000_00, 0, other_income_categories_cents=4_000_00)
+            == 49_000_00
+        )
+
+    def test_negative_other_income_category_offsets_taxable_income(self):
+        # A 7,000 EUR rental LOSS legally reduces taxable income below
+        # gross wages -- this is the entire point of the signed parameter
+        # (§2 Abs. 3 EStG horizontal loss offsetting), not an error.
+        assert (
+            calculate_taxable_income(45_000_00, 0, other_income_categories_cents=-7_000_00)
+            == 38_000_00
+        )
+
+    def test_large_rental_loss_can_floor_total_taxable_income_at_zero(self):
+        assert (
+            calculate_taxable_income(5_000_00, 0, other_income_categories_cents=-20_000_00) == 0
+        )

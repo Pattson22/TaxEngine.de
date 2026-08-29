@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.database import get_db
-from app.models.enums import FilingStatus
+from app.eric.submission_service import SubmissionError, submit_filing
 from app.models.tax_filing import TaxFiling
 from app.models.user import User
-from app.schemas.tax_filing import TaxFilingCreate, TaxFilingRead
+from app.schemas.payment import PaymentIntentResponse
+from app.schemas.tax_filing import TaxFilingCreate, TaxFilingRead, TaxFilingUpdate
+from app.services.payment_service import PaymentError, create_payment_intent_for_filing
 from app.services.tax_calculation_service import TaxCalculationError, calculate_tax_filing
 
 router = APIRouter(prefix="/tax-filings", tags=["tax-filings"])
@@ -69,6 +70,28 @@ def get_tax_filing(
     return _get_owned_filing_or_404(filing_id, current_user, db)
 
 
+@router.patch("/{filing_id}", response_model=TaxFilingRead)
+def update_tax_filing(
+    filing_id: uuid.UUID,
+    payload: TaxFilingUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TaxFiling:
+    """Update Günstigerprüfung inputs (number_of_children,
+    kindergeld_received_cents) before calculating. Values here take effect
+    the next time `/calculate` runs -- they don't retroactively touch
+    already-computed figures."""
+    filing = _get_owned_filing_or_404(filing_id, current_user, db)
+
+    updates = payload.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(filing, field, value)
+
+    db.commit()
+    db.refresh(filing)
+    return filing
+
+
 @router.post("/{filing_id}/calculate", response_model=TaxFilingRead)
 def calculate_filing(
     filing_id: uuid.UUID,
@@ -91,30 +114,59 @@ def calculate_filing(
     return filing
 
 
-@router.post("/{filing_id}/pay", response_model=TaxFilingRead)
-def mark_filing_fee_paid(
+@router.post("/{filing_id}/payment-intent", response_model=PaymentIntentResponse)
+def create_filing_payment_intent(
+    filing_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PaymentIntentResponse:
+    """Create a Stripe PaymentIntent for the flat €34.90 processing fee.
+
+    The frontend uses the returned `client_secret` with Stripe.js/Elements
+    to collect card details directly against Stripe (never touching this
+    backend, keeping it out of PCI scope). The filing only transitions to
+    FEE_PAID once Stripe confirms the charge via the `/webhooks/stripe`
+    endpoint — creating a payment intent here does not, by itself, mark
+    anything as paid.
+    """
+    filing = _get_owned_filing_or_404(filing_id, current_user, db)
+
+    try:
+        intent = create_payment_intent_for_filing(filing)
+    except PaymentError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    db.commit()
+    return PaymentIntentResponse(
+        client_secret=intent.client_secret,
+        payment_intent_id=intent.id,
+        amount_cents=filing.processing_fee_cents,
+    )
+
+
+@router.post("/{filing_id}/submit", response_model=TaxFilingRead)
+def submit_tax_filing(
     filing_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> TaxFiling:
-    """Placeholder for the payment-provider webhook flow: marks the flat
-    €34.90 processing fee as paid. A real implementation verifies a Stripe/
-    Adyen webhook signature and records `payment_provider_ref` here instead
-    of trusting a bare client call — this endpoint exists only so the
-    filing-status state machine (DRAFT -> CALCULATED -> FEE_PAID ->
-    SUBMITTED) has a place to transition, and must not be exposed
-    unauthenticated/unverified in production."""
+    """Submit a FEE_PAID filing to ELSTER.
+
+    *** Currently uses StubEricClient, not a real ERiC submission ***
+    See app/eric/client.py's NativeEricClient docstring: real submission
+    requires a signed BZSt developer agreement and the actual ERiC
+    library, neither of which exists yet. This endpoint exercises the
+    real orchestration (XML generation, status transitions, Transferticket
+    persistence) end-to-end against a stub that always "succeeds" -- it
+    must not be exposed as if it performs a real government submission
+    until NativeEricClient is implemented.
+    """
     filing = _get_owned_filing_or_404(filing_id, current_user, db)
 
-    if filing.status != FilingStatus.CALCULATED:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Filing must be calculated before the fee can be marked as paid.",
-        )
+    try:
+        filing = submit_filing(db, current_user, filing)
+    except SubmissionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-    filing.status = FilingStatus.FEE_PAID
-    filing.fee_paid_at = datetime.now(timezone.utc)
-
-    db.commit()
-    db.refresh(filing)
     return filing

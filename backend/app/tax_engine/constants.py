@@ -23,6 +23,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from app.tax_engine.enums import FederalState
+
 
 @dataclass(frozen=True)
 class TaxYearConstants:
@@ -90,6 +92,48 @@ class TaxYearConstants:
     handwerkerleistungen_credit_fraction: Decimal
     handwerkerleistungen_max_credit_cents: int
 
+    # §20 Abs. 9 EStG — Sparer-Pauschbetrag, the flat allowance shielding
+    # investment income from tax. Individual investment-related costs have
+    # not been separately deductible since 2009 -- this Pauschbetrag is the
+    # ONLY allowance, not a "greater of actual-or-flat" comparison like the
+    # Werbungskosten/Sonderausgaben Pauschbeträge above.
+    sparer_pauschbetrag_single_cents: int
+    sparer_pauschbetrag_joint_cents: int
+
+    # §32d Abs. 1 EStG — flat Kapitalertragsteuer (Abgeltungsteuer) rate on
+    # capital income. Reduced when church-tax-liable via the formula
+    # rate = 1 / (4 + k) using church_tax_rate_bavaria_bw/other_states
+    # above as k -- see tax_engine/capital_gains.py.
+    kapitalertragsteuer_rate: Decimal
+
+    # §32 Abs. 6 EStG — Kinderfreibetrag + BEA-Freibetrag combined, per
+    # child. "Joint" is the full household amount; "single" is the default
+    # per-parent half for separately assessed parents (see
+    # tax_engine/kinderfreibetrag.py for the half-transfer scope caveat).
+    kinderfreibetrag_total_per_child_joint_cents: int
+    kinderfreibetrag_total_per_child_single_cents: int
+
+    # §66 EStG — Kindergeld, paid monthly by the Familienkasse. Not part of
+    # the tax return itself, but required as an input to the
+    # Günstigerprüfung's clawback calculation.
+    kindergeld_monthly_cents_per_child: int
+
+    # Kirchensteuer Kappung — each Land's Landeskirchensteuergesetz caps
+    # Kirchensteuer at a percentage of TAXABLE INCOME (not income tax) once
+    # that ceiling is lower than the standard 8%/9%-of-income-tax amount.
+    # Bayern offers NO Kappung at all (absent from this dict entirely --
+    # tax_engine/church_tax.py treats "not in the dict" as "not capped").
+    # *** APPROXIMATE, SEE church_tax.py MODULE DOCSTRING ***: several
+    # states set a DIFFERENT rate per denomination/Landeskirche (e.g.
+    # Baden-Württemberg: 2.75% for Evang. Württemberg vs. 3.5% for Evang.
+    # Baden/Catholic) and some require an Antrag rather than applying
+    # automatically -- neither distinction is modeled here. Where a state
+    # has multiple published rates, the HIGHER (more conservative, i.e.
+    # less favorable to the taxpayer) rate is used, so this module never
+    # OVERSTATES a refund by assuming a cap the taxpayer may not actually
+    # qualify for.
+    kirchensteuer_kappung_rates: dict[FederalState, Decimal]
+
 
 # -----------------------------------------------------------------------------
 # 2024 tax year (also used as the 2025 placeholder pending official BMF
@@ -121,6 +165,30 @@ TAX_YEAR_2024 = TaxYearConstants(
     childcare_max_deductible_cents_per_child=400_000,  # €4,000/child (2024)
     handwerkerleistungen_credit_fraction=Decimal("0.20"),
     handwerkerleistungen_max_credit_cents=120_000,   # €1,200/year cap on the credit itself
+    sparer_pauschbetrag_single_cents=100_000,        # €1,000
+    sparer_pauschbetrag_joint_cents=200_000,         # €2,000
+    kapitalertragsteuer_rate=Decimal("0.25"),
+    kinderfreibetrag_total_per_child_joint_cents=954_000,   # €9,540 (€6,612 + €2,928 BEA)
+    kinderfreibetrag_total_per_child_single_cents=477_000,  # €4,770 (half of the joint amount)
+    kindergeld_monthly_cents_per_child=25_000,       # €250/month
+    kirchensteuer_kappung_rates={
+        # BAYERN intentionally absent -- no Kappung available there.
+        FederalState.BADEN_WUERTTEMBERG: Decimal("0.035"),
+        FederalState.BERLIN: Decimal("0.035"),
+        FederalState.BRANDENBURG: Decimal("0.035"),
+        FederalState.BREMEN: Decimal("0.035"),
+        FederalState.HAMBURG: Decimal("0.035"),
+        FederalState.HESSEN: Decimal("0.040"),
+        FederalState.MECKLENBURG_VORPOMMERN: Decimal("0.035"),
+        FederalState.NIEDERSACHSEN: Decimal("0.035"),
+        FederalState.NORDRHEIN_WESTFALEN: Decimal("0.040"),
+        FederalState.RHEINLAND_PFALZ: Decimal("0.040"),
+        FederalState.SAARLAND: Decimal("0.040"),
+        FederalState.SACHSEN: Decimal("0.035"),
+        FederalState.SACHSEN_ANHALT: Decimal("0.035"),
+        FederalState.SCHLESWIG_HOLSTEIN: Decimal("0.035"),
+        FederalState.THUERINGEN: Decimal("0.035"),
+    },
 )
 
 SUPPORTED_TAX_YEARS: dict[int, TaxYearConstants] = {

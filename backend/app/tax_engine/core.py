@@ -126,14 +126,16 @@ def calculate_taxable_income(
     gross_income_cents: int,
     werbungskosten_cents: int,
     other_deductions_cents: int = 0,
+    other_income_categories_cents: int = 0,
 ) -> int:
     """Derive zu versteuerndes Einkommen (zvE) — the taxable income base.
 
-    This is a simplified MVP derivation covering the employee-income case
-    (Einkünfte aus nichtselbständiger Arbeit) only: it does not yet account
-    for Sonderausgaben-Pauschbetrag, Kinderfreibetrag, or other income
-    categories (capital gains, rental, self-employment). Those are separate
-    future modules that would compose with this function's output.
+    Employment income (gross_income_cents/werbungskosten_cents) is the
+    primary case this MVP covers, with capital gains handled entirely
+    separately (see tax_engine/capital_gains.py — it is NOT part of this
+    function, since Abgeltungsteuer is a flat-rate regime outside the
+    progressive Gesamtbetrag der Einkünfte). Kinderfreibetrag is also not
+    yet accounted for here.
 
     Args:
         gross_income_cents: Brutto wage income (sum of
@@ -142,11 +144,22 @@ def calculate_taxable_income(
             the greater of actual or flat-rate work-related expense deduction.
         other_deductions_cents: additional Sonderausgaben/außergewöhnliche
             Belastungen already resolved to cents (default 0 for MVP scope).
+        other_income_categories_cents: net income from OTHER progressive-
+            tariff income categories that combine at the Gesamtbetrag der
+            Einkünfte level — currently just rental income (§21 EStG, see
+            tax_engine/rental_income.py). UNLIKE werbungskosten_cents, this
+            is NOT floored before combining: a net rental LOSS is legally
+            negative here and directly offsets other positive income
+            (§2 Abs. 3 EStG horizontal loss offsetting), which is exactly
+            why this is a separate signed parameter rather than being
+            folded into werbungskosten_cents.
 
     Returns:
         Taxable income in cents, floored at 0 (income tax law does not
         produce negative taxable income at this stage — losses carried
-        forward are a distinct mechanism, out of scope for the MVP).
+        forward beyond fully offsetting all other income categories in the
+        same year, Verlustvortrag, is a distinct mechanism, out of scope
+        for the MVP).
     """
     if gross_income_cents < 0:
         raise InvalidIncomeError("gross_income_cents cannot be negative.")
@@ -155,5 +168,10 @@ def calculate_taxable_income(
     if other_deductions_cents < 0:
         raise InvalidIncomeError("other_deductions_cents cannot be negative.")
 
-    taxable_income = gross_income_cents - werbungskosten_cents - other_deductions_cents
+    taxable_income = (
+        gross_income_cents
+        - werbungskosten_cents
+        + other_income_categories_cents
+        - other_deductions_cents
+    )
     return max(taxable_income, 0)

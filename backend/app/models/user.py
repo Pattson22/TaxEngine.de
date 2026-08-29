@@ -14,7 +14,10 @@ from app.database import Base
 from app.models.enums import ChurchTaxType, FederalState, TaxClass, pg_enum
 
 if TYPE_CHECKING:
+    from app.models.capital_income_statement import CapitalIncomeStatement
     from app.models.deduction import Deduction
+    from app.models.rental_property_statement import RentalPropertyStatement
+    from app.models.self_employment_statement import SelfEmploymentStatement
     from app.models.tax_filing import TaxFiling
     from app.models.wage_tax_certificate import WageTaxCertificate
 
@@ -69,6 +72,15 @@ class User(Base):
 
     spouse: Mapped["User | None"] = relationship("User", remote_side=[id])
     wage_tax_certificates: Mapped[list["WageTaxCertificate"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    capital_income_statements: Mapped[list["CapitalIncomeStatement"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    rental_property_statements: Mapped[list["RentalPropertyStatement"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    self_employment_statements: Mapped[list["SelfEmploymentStatement"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
     deductions: Mapped[list["Deduction"]] = relationship(back_populates="user", cascade="all, delete-orphan")

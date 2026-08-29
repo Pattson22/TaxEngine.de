@@ -1,0 +1,96 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { createPaymentIntent } from "@/lib/api";
+import { useRequireAuth } from "@/lib/use-require-auth";
+import { getStripe } from "@/lib/stripe";
+import { formatCents } from "@/lib/money";
+import { Button, Card, ErrorBanner, PageHeading } from "@/components/ui";
+
+export default function PayFilingPage() {
+  const { id } = useParams<{ id: string }>();
+  const { token, isLoading: authLoading } = useRequireAuth();
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [amountCents, setAmountCents] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    createPaymentIntent(token, id)
+      .then((intent) => {
+        setClientSecret(intent.client_secret);
+        setAmountCents(intent.amount_cents);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to start payment."));
+  }, [token, id]);
+
+  if (authLoading || !token) return null;
+
+  return (
+    <div className="mx-auto max-w-md px-6 py-12">
+      <PageHeading
+        title="Pay the processing fee"
+        subtitle={amountCents !== null ? `Flat fee: ${formatCents(amountCents)}` : undefined}
+      />
+      {error && <ErrorBanner message={error} />}
+      <Card>
+        {clientSecret ? (
+          <Elements stripe={getStripe()} options={{ clientSecret }}>
+            <CheckoutForm filingId={id} />
+          </Elements>
+        ) : (
+          !error && <p className="text-sm text-slate-500">Preparing payment…</p>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function CheckoutForm({ filingId }: { filingId: string }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!stripe || !elements) return;
+    setIsSubmitting(true);
+    setError(null);
+
+    const { error: confirmError } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/filings/${filingId}`,
+      },
+    });
+
+    if (confirmError) {
+      setError(confirmError.message ?? "Payment failed.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // On success, Stripe redirects to return_url. If confirmPayment
+    // resolves without redirecting (e.g. certain payment methods), fall
+    // back to navigating there manually.
+    router.push(`/filings/${filingId}`);
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && <ErrorBanner message={error} />}
+      <PaymentElement />
+      <Button type="submit" disabled={!stripe || isSubmitting} className="w-full">
+        {isSubmitting ? "Processing…" : "Pay now"}
+      </Button>
+      <p className="text-xs text-slate-500">
+        Your filing updates to &quot;fee paid&quot; automatically once Stripe confirms the
+        charge via a verified webhook — this may take a few seconds after payment.
+      </p>
+    </form>
+  );
+}

@@ -27,6 +27,14 @@ class Settings(BaseSettings):
 
     cors_allowed_origins: list[str] = ["http://localhost:3000"]
 
+    # Stripe (processing-fee payment). Both MUST be overridden via
+    # environment variable in any non-local environment -- these
+    # placeholders exist only so the app can boot without a .env file, and
+    # any call against them will simply fail against the real Stripe API
+    # (they are not valid keys), never silently succeed insecurely.
+    stripe_secret_key: str = "sk_test_placeholder_override_in_env"
+    stripe_webhook_secret: str = "whsec_placeholder_override_in_env"
+
     environment: str = "development"
 
 
