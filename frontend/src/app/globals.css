@@ -28,6 +28,17 @@
   --color-sage-soft: #e4ebe6;
   --color-clay: #9c4a3c;
   --color-clay-soft: #f1e3df;
+
+  /* Category accents ("Ledger Tabs") -- one hue per income type, so a
+     filing's sections read at a glance the way a real ledger's colored
+     divider tabs do. Money itself stays ink-on-paper (see LedgerLine);
+     these mark WHICH section, never a value's sign. */
+  --color-indigo: #3b5b8c;
+  --color-indigo-soft: #7d9dc2;
+  --color-terracotta: #b8562e;
+  --color-terracotta-soft: #d99a6c;
+  --color-mauve: #8c4a6b;
+  --color-mauve-soft: #c087a3;
 }
 
 body {

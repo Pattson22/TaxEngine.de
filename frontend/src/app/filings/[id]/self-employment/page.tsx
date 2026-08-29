@@ -41,7 +41,7 @@ export default function AddSelfEmploymentPage() {
 
   return (
     <div className="mx-auto max-w-md px-6 py-14">
-      <Eyebrow>Anlage S / EÜR</Eyebrow>
+      <Eyebrow tone="terracotta">Anlage S / EÜR</Eyebrow>
       <PageHeading title="Add self-employment income" subtitle="Freelance or business income." />
       <Card>
         {error && <ErrorBanner message={error} />}

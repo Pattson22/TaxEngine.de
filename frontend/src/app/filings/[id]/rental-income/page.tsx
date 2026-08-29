@@ -41,7 +41,7 @@ export default function AddRentalIncomePage() {
 
   return (
     <div className="mx-auto max-w-md px-6 py-14">
-      <Eyebrow>Anlage V</Eyebrow>
+      <Eyebrow tone="sage">Anlage V</Eyebrow>
       <PageHeading title="Add a rental property" subtitle="Vermietung und Verpachtung." />
       <Card>
         {error && <ErrorBanner message={error} />}

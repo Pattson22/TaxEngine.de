@@ -60,11 +60,54 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
   );
 }
 
-export function Eyebrow({ children }: { children: ReactNode }) {
+const EYEBROW_TONE: Record<string, string> = {
+  brass: "text-brass",
+  indigo: "text-indigo",
+  sage: "text-sage",
+  terracotta: "text-terracotta",
+  mauve: "text-mauve",
+};
+
+export function Eyebrow({
+  children,
+  tone = "brass",
+}: {
+  children: ReactNode;
+  tone?: keyof typeof EYEBROW_TONE;
+}) {
   return (
-    <p className="mb-3 text-[11px] font-medium tracking-[0.14em] text-brass uppercase">
+    <p className={`mb-3 text-[11px] font-medium tracking-[0.14em] uppercase ${EYEBROW_TONE[tone]}`}>
       {children}
     </p>
+  );
+}
+
+const CATEGORY_TAB: Record<string, { label: string; dot: string; text: string; bg: string }> = {
+  wage: { label: "Lohn", dot: "bg-brass", text: "text-brass", bg: "bg-brass-soft/20" },
+  capital: { label: "Kapital", dot: "bg-indigo", text: "text-indigo", bg: "bg-indigo-soft/20" },
+  rental: { label: "Miete", dot: "bg-sage", text: "text-sage", bg: "bg-sage-soft" },
+  self_employment: {
+    label: "Selbstständig",
+    dot: "bg-terracotta",
+    text: "text-terracotta",
+    bg: "bg-terracotta-soft/20",
+  },
+  children: { label: "Kinder", dot: "bg-mauve", text: "text-mauve", bg: "bg-mauve-soft/20" },
+};
+
+/** A small colored tab marking which income category a section belongs
+ * to -- like a real ledger's divider tabs. Marks the CATEGORY only; a
+ * value's sign (a rental loss, say) stays sage/clay on the figure itself,
+ * same as before -- see LedgerLine. */
+export function CategoryTab({ category }: { category: keyof typeof CATEGORY_TAB }) {
+  const tab = CATEGORY_TAB[category];
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${tab.bg} ${tab.text}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${tab.dot}`} />
+      {tab.label}
+    </span>
   );
 }
 

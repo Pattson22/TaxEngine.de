@@ -47,7 +47,7 @@ export default function AddCapitalIncomePage() {
 
   return (
     <div className="mx-auto max-w-md px-6 py-14">
-      <Eyebrow>Anlage KAP</Eyebrow>
+      <Eyebrow tone="indigo">Anlage KAP</Eyebrow>
       <PageHeading
         title="Add capital income"
         subtitle="From your bank or broker's annual tax certificate (Steuerbescheinigung)."

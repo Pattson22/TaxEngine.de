@@ -16,7 +16,7 @@ import {
 } from "@/lib/api";
 import { useRequireOnboarding } from "@/lib/use-require-auth";
 import { eurosToCents, formatCents } from "@/lib/money";
-import { Button, Card, ErrorBanner, Eyebrow, Input, Label, StatusStamp } from "@/components/ui";
+import { Button, CategoryTab, Card, ErrorBanner, Eyebrow, Input, Label, StatusStamp } from "@/components/ui";
 import { Ledger, LedgerLine } from "@/components/ledger";
 import type {
   CapitalIncomeStatement,
@@ -152,9 +152,12 @@ export default function FilingDetailPage() {
       <div className="space-y-10">
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
-              Wage income
-            </h2>
+            <div className="flex items-center gap-2.5">
+              <CategoryTab category="wage" />
+              <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+                Wage income
+              </h2>
+            </div>
             <button
               onClick={() => router.push(`/filings/${id}/wage-income`)}
               className="border-b border-brass/40 text-sm text-brass transition-colors hover:border-brass"
@@ -213,12 +216,15 @@ export default function FilingDetailPage() {
 
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
-              Capital income
-            </h2>
+            <div className="flex items-center gap-2.5">
+              <CategoryTab category="capital" />
+              <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+                Capital income
+              </h2>
+            </div>
             <button
               onClick={() => router.push(`/filings/${id}/capital-income`)}
-              className="border-b border-brass/40 text-sm text-brass transition-colors hover:border-brass"
+              className="border-b border-indigo/40 text-sm text-indigo transition-colors hover:border-indigo"
             >
               + Add
             </button>
@@ -244,12 +250,15 @@ export default function FilingDetailPage() {
 
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
-              Rental income
-            </h2>
+            <div className="flex items-center gap-2.5">
+              <CategoryTab category="rental" />
+              <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+                Rental income
+              </h2>
+            </div>
             <button
               onClick={() => router.push(`/filings/${id}/rental-income`)}
-              className="border-b border-brass/40 text-sm text-brass transition-colors hover:border-brass"
+              className="border-b border-sage/40 text-sm text-sage transition-colors hover:border-sage"
             >
               + Add property
             </button>
@@ -276,12 +285,15 @@ export default function FilingDetailPage() {
 
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
-              Self-employment income
-            </h2>
+            <div className="flex items-center gap-2.5">
+              <CategoryTab category="self_employment" />
+              <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+                Self-employment income
+              </h2>
+            </div>
             <button
               onClick={() => router.push(`/filings/${id}/self-employment`)}
-              className="border-b border-brass/40 text-sm text-brass transition-colors hover:border-brass"
+              className="border-b border-terracotta/40 text-sm text-terracotta transition-colors hover:border-terracotta"
             >
               + Add
             </button>
@@ -470,9 +482,12 @@ function KinderfreibetragSection({
 
   return (
     <section>
-      <h2 className="mb-3 font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
-        Children
-      </h2>
+      <div className="mb-3 flex items-center gap-2.5">
+        <CategoryTab category="children" />
+        <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+          Children
+        </h2>
+      </div>
       {error && <ErrorBanner message={error} />}
       <div className="flex flex-wrap items-end gap-3">
         <div>
