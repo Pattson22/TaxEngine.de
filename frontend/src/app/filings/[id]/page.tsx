@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   calculateTaxFiling,
@@ -97,8 +98,19 @@ export default function FilingDetailPage() {
     }
   }
 
-  if (authLoading || !token || isLoading || !filing) {
+  if (authLoading || !token || isLoading) {
     return <div className="mx-auto max-w-3xl px-6 py-14 text-sm text-ink/40">Loading…</div>;
+  }
+
+  if (!filing) {
+    return (
+      <div className="mx-auto max-w-3xl px-6 py-14">
+        <ErrorBanner message={error ?? "Couldn't load this return."} />
+        <Link href="/dashboard" className="text-sm text-ink/60 underline hover:text-ink">
+          Back to your returns
+        </Link>
+      </div>
+    );
   }
 
   const totalGrossWage = wageCerts.reduce((sum, c) => sum + c.gross_wage_cents, 0);
