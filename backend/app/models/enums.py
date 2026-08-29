@@ -25,6 +25,7 @@ __all__ = [
     "DeductionCategory",
     "FederalState",
     "FilingStatus",
+    "SubmissionMode",
     "TaxClass",
     "pg_enum",
 ]
@@ -80,3 +81,24 @@ class FilingStatus(str, Enum):
     SUBMITTED = "SUBMITTED"
     ACCEPTED = "ACCEPTED"
     REJECTED = "REJECTED"
+
+
+class SubmissionMode(str, Enum):
+    """Which ELSTER transmission path a filing uses.
+
+    KOMPRIMIERT ("compressed"/unauthenticated): the XML is transmitted to
+    the Finanzamt via ERiC same as any other submission, but without a
+    personal ELSTER certificate attached, so it isn't legally binding on
+    its own -- the taxpayer must additionally print, sign, and mail a
+    cover sheet (see app/eric/cover_sheet.py) to complete the filing. This
+    is the only mode this project supports right now, since it doesn't
+    require every user to first enroll their own ELSTER certificate.
+
+    AUTHENTIFIZIERT: the fully paperless path, authenticated with the
+    taxpayer's own personal ELSTER certificate (obtained by them directly
+    from ElsterOnline, independent of us). Not implemented yet -- reserved
+    so the column doesn't need a second migration once it is.
+    """
+
+    KOMPRIMIERT = "KOMPRIMIERT"
+    AUTHENTIFIZIERT = "AUTHENTIFIZIERT"

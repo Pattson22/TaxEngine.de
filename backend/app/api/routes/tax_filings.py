@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.database import get_db
+from app.eric.cover_sheet import build_cover_sheet_pdf
 from app.eric.submission_service import SubmissionError, submit_filing
+from app.models.enums import FilingStatus, SubmissionMode
 from app.models.tax_filing import TaxFiling
 from app.models.user import User
 from app.schemas.payment import PaymentIntentResponse
@@ -177,13 +180,18 @@ def submit_tax_filing(
     """Submit a FEE_PAID filing to ELSTER.
 
     *** Currently uses StubEricClient, not a real ERiC submission ***
-    See app/eric/client.py's NativeEricClient docstring: real submission
-    requires a signed BZSt developer agreement and the actual ERiC
-    library, neither of which exists yet. This endpoint exercises the
-    real orchestration (XML generation, status transitions, Transferticket
+    See app/eric/client.py's NativeEricClient docstring: the real
+    transmission needs the actual ERiC library, obtained via a free BZSt
+    developer registration (see docs/ELSTER_ERIC_INTEGRATION.md) -- that
+    part is just unbuilt, not blocked. This endpoint exercises the real
+    orchestration (XML generation, status transitions, Transferticket
     persistence) end-to-end against a stub that always "succeeds" -- it
     must not be exposed as if it performs a real government submission
     until NativeEricClient is implemented.
+
+    Every filing submits in SubmissionMode.KOMPRIMIERT (the only mode
+    implemented): once ACCEPTED, GET /{filing_id}/cover-sheet and
+    POST /{filing_id}/mark-mailed complete the paper half of the filing.
     """
     filing = _get_owned_filing_or_404(filing_id, current_user, db)
 
@@ -193,4 +201,67 @@ def submit_tax_filing(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
+    return filing
+
+
+@router.get("/{filing_id}/cover-sheet")
+def get_cover_sheet(
+    filing_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Download the KOMPRIMIERT cover sheet PDF -- see
+    app/eric/cover_sheet.py's module docstring for what this is and isn't.
+    Requires the filing to have actually been submitted (SUBMITTED,
+    ACCEPTED, or REJECTED all have a Transferticket to reference)."""
+    filing = _get_owned_filing_or_404(filing_id, current_user, db)
+
+    if filing.submission_mode != SubmissionMode.KOMPRIMIERT:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This filing isn't using KOMPRIMIERT submission -- no cover sheet applies.",
+        )
+    if filing.status not in (FilingStatus.SUBMITTED, FilingStatus.ACCEPTED, FilingStatus.REJECTED):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Submit this filing to ELSTER before downloading its cover sheet.",
+        )
+
+    pdf_bytes = build_cover_sheet_pdf(current_user, filing)
+
+    if filing.cover_sheet_generated_at is None:
+        filing.cover_sheet_generated_at = datetime.now(timezone.utc)
+        db.commit()
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="komprimierte-steuererklaerung-{filing.tax_year}.pdf"'
+            )
+        },
+    )
+
+
+@router.post("/{filing_id}/mark-mailed", response_model=TaxFilingRead)
+def mark_cover_sheet_mailed(
+    filing_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TaxFiling:
+    """Record the taxpayer's own attestation that they printed, signed,
+    and mailed the cover sheet -- see TaxFiling.cover_sheet_mailed_at's
+    docstring for why this is a UI checklist item, not a verified fact."""
+    filing = _get_owned_filing_or_404(filing_id, current_user, db)
+
+    if filing.cover_sheet_generated_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Download the cover sheet before marking it as mailed.",
+        )
+
+    filing.cover_sheet_mailed_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(filing)
     return filing

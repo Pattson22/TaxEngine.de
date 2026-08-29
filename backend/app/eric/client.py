@@ -80,16 +80,26 @@ class NativeEricClient(EricClient):
     (`libericapi.so`/`.dylib` or `eric.dll`) belongs. Building it requires,
     in order:
 
-      1. A signed ERiC software-developer agreement with the BZSt
-         (Bundeszentralamt für Steuern) — this is the actual blocker;
-         nothing below is possible without it.
+      1. Free developer registration at elster.de/eportal/infoseite/entwickler,
+         reviewed by the Bayerisches Landesamt für Steuern -- typically
+         approved within days, no fee, no complex agreement. This is a
+         paperwork/business step for whoever runs TaxEngine.de, not a
+         coding blocker -- it just hasn't been done yet.
       2. The ERiC SDK itself (library binary + header/type definitions),
-         which BZSt only distributes to registered developers.
-      3. A registered Herstellernummer (vendor id) and Softwarezertifikat
-         (organization certificate) — see
-         docs/ELSTER_ERIC_INTEGRATION.md's security section for how the
-         certificate must be stored (secrets manager, never on disk in
-         the container image).
+         downloaded from the developer portal once registered.
+      3. A registered Herstellernummer (vendor id), requested through the
+         portal's "Anträge und Formulare" section.
+
+    That covers TRANSMITTING a filing at all. It does NOT cover
+    authenticating one: ELSTER submissions are authenticated with the
+    individual TAXPAYER's own personal ELSTER certificate (which each user
+    registers themselves via ElsterOnline, independent of us), not a
+    vendor-wide certificate -- see docs/ELSTER_ERIC_INTEGRATION.md. Until
+    users can link their own certificate, every submission this project
+    makes must go out unauthenticated ("komprimiert"/`send-NoSig`, see
+    xml_builder.py and app/models/enums.py's SubmissionMode), which still
+    requires the taxpayer to print, sign, and mail a cover sheet (see
+    app/eric/cover_sheet.py) to actually complete the filing.
 
     Implementation sketch once those are available (cffi preferred over
     raw ctypes for ERiC's large C API surface — cleaner struct marshaling):
@@ -106,9 +116,9 @@ class NativeEricClient(EricClient):
     """
 
     _NOT_IMPLEMENTED_MESSAGE = (
-        "NativeEricClient requires the real ERiC library and a BZSt developer "
-        "certificate, neither of which this project has yet -- see this "
-        "class's docstring for what's needed before it can be implemented."
+        "NativeEricClient requires the real ERiC library, obtained via BZSt "
+        "developer registration, which this project hasn't completed yet -- "
+        "see this class's docstring for what's needed before it can be implemented."
     )
 
     def validate_xml(self, xml: str) -> None:

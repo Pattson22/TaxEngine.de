@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   calculateTaxFiling,
+  downloadCoverSheet,
   getTaxFiling,
   listCapitalIncomeStatements,
   listDeductions,
   listRentalPropertyStatements,
   listSelfEmploymentStatements,
   listWageTaxCertificates,
+  markCoverSheetMailed,
   submitTaxFiling,
   updateTaxFiling,
 } from "@/lib/api";
@@ -41,6 +43,8 @@ export default function FilingDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDownloadingCoverSheet, setIsDownloadingCoverSheet] = useState(false);
+  const [isMarkingMailed, setIsMarkingMailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
@@ -95,6 +99,41 @@ export default function FilingDetailPage() {
       setError(err instanceof Error ? err.message : "Couldn't submit this return.");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleDownloadCoverSheet() {
+    if (!token) return;
+    setIsDownloadingCoverSheet(true);
+    setError(null);
+    try {
+      const blob = await downloadCoverSheet(token, id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `komprimierte-steuererklaerung-${filing?.tax_year ?? ""}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      const updated = await getTaxFiling(token, id);
+      setFiling(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't download the cover sheet.");
+    } finally {
+      setIsDownloadingCoverSheet(false);
+    }
+  }
+
+  async function handleMarkMailed() {
+    if (!token) return;
+    setIsMarkingMailed(true);
+    setError(null);
+    try {
+      const updated = await markCoverSheetMailed(token, id);
+      setFiling(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't record that.");
+    } finally {
+      setIsMarkingMailed(false);
     }
   }
 
@@ -433,13 +472,49 @@ export default function FilingDetailPage() {
             ) : (
               <div className="mt-3">
                 <p className="text-sm text-ink/45">
-                  Fee paid — ready to submit. (Uses a test integration until a real ELSTER
-                  developer certificate is in place.)
+                  Fee paid — ready to submit. (Uses a test integration until the real ERiC
+                  library is wired in.)
                 </p>
                 <Button className="mt-3" onClick={handleSubmit} disabled={isSubmitting}>
                   {isSubmitting ? "Submitting…" : "Submit to the Finanzamt"}
                 </Button>
               </div>
+            )}
+          </section>
+        )}
+
+        {filing.elster_transfer_ticket && filing.submission_mode === "KOMPRIMIERT" && (
+          <section className="border border-brass/30 bg-brass-soft/15 p-6">
+            <h2 className="font-display text-base font-medium text-ink">
+              Finish by mail (komprimiert)
+            </h2>
+            {filing.cover_sheet_mailed_at ? (
+              <p className="mt-1.5 text-sm text-sage">
+                Marked as mailed — your filing is complete once the Finanzamt receives it.
+              </p>
+            ) : (
+              <>
+                <p className="mt-1.5 text-sm text-ink/60">
+                  This submission went out unauthenticated (no personal ELSTER certificate on
+                  file yet), so it isn&apos;t legally binding until you print, sign, and mail the
+                  cover sheet below to your Finanzamt.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={handleDownloadCoverSheet}
+                    disabled={isDownloadingCoverSheet}
+                  >
+                    {isDownloadingCoverSheet ? "Preparing…" : "Download cover sheet"}
+                  </Button>
+                  <Button
+                    onClick={handleMarkMailed}
+                    disabled={isMarkingMailed || !filing.cover_sheet_generated_at}
+                  >
+                    {isMarkingMailed ? "Saving…" : "I've mailed it"}
+                  </Button>
+                </div>
+              </>
             )}
           </section>
         )}

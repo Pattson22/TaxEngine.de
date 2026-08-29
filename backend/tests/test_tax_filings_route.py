@@ -23,8 +23,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.api.routes.tax_filings import calculate_filing, create_tax_filing, list_supported_tax_years
-from app.models.enums import FilingStatus
+from app.api.routes.tax_filings import (
+    calculate_filing,
+    create_tax_filing,
+    get_cover_sheet,
+    list_supported_tax_years,
+    mark_cover_sheet_mailed,
+)
+from app.models.enums import FilingStatus, SubmissionMode
 from app.models.tax_filing import TaxFiling
 from app.models.user import User
 from app.schemas.tax_filing import TaxFilingCreate
@@ -99,3 +105,93 @@ class TestCreateTaxFilingUnsupportedYear:
 class TestListSupportedTaxYears:
     def test_returns_the_currently_reviewed_years(self):
         assert list_supported_tax_years() == [2024]
+
+
+def _accepted_komprimiert_filing(**overrides) -> tuple[TaxFiling, User]:
+    user = User(id=uuid.uuid4(), first_name="Anna", last_name="Muster")
+    defaults = dict(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        tax_year=2024,
+        status=FilingStatus.ACCEPTED,
+        submission_mode=SubmissionMode.KOMPRIMIERT,
+        elster_transfer_ticket="STUB-abc123",
+    )
+    defaults.update(overrides)
+    filing = TaxFiling(**defaults)
+    return filing, user
+
+
+class TestGetCoverSheet:
+    def test_rejects_authentifiziert_filing(self):
+        filing, user = _accepted_komprimiert_filing(submission_mode=SubmissionMode.AUTHENTIFIZIERT)
+        db = MagicMock()
+        db.get.return_value = filing
+
+        with pytest.raises(HTTPException) as exc_info:
+            get_cover_sheet(filing.id, current_user=user, db=db)
+
+        assert exc_info.value.status_code == 409
+
+    def test_rejects_filing_not_yet_submitted(self):
+        filing, user = _accepted_komprimiert_filing(status=FilingStatus.FEE_PAID)
+        db = MagicMock()
+        db.get.return_value = filing
+
+        with pytest.raises(HTTPException) as exc_info:
+            get_cover_sheet(filing.id, current_user=user, db=db)
+
+        assert exc_info.value.status_code == 409
+
+    def test_successful_download_returns_pdf_and_records_generated_at(self):
+        filing, user = _accepted_komprimiert_filing()
+        db = MagicMock()
+        db.get.return_value = filing
+        assert filing.cover_sheet_generated_at is None
+
+        response = get_cover_sheet(filing.id, current_user=user, db=db)
+
+        assert response.media_type == "application/pdf"
+        assert response.body.startswith(b"%PDF-")
+        assert filing.cover_sheet_generated_at is not None
+        db.commit.assert_called_once()
+
+    def test_redownload_does_not_overwrite_generated_at(self):
+        import datetime
+
+        first_generated_at = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+        filing, user = _accepted_komprimiert_filing(cover_sheet_generated_at=first_generated_at)
+        db = MagicMock()
+        db.get.return_value = filing
+
+        get_cover_sheet(filing.id, current_user=user, db=db)
+
+        assert filing.cover_sheet_generated_at == first_generated_at
+        db.commit.assert_not_called()
+
+
+class TestMarkCoverSheetMailed:
+    def test_rejects_when_cover_sheet_never_generated(self):
+        filing, user = _accepted_komprimiert_filing()
+        db = MagicMock()
+        db.get.return_value = filing
+
+        with pytest.raises(HTTPException) as exc_info:
+            mark_cover_sheet_mailed(filing.id, current_user=user, db=db)
+
+        assert exc_info.value.status_code == 409
+
+    def test_records_mailed_timestamp(self):
+        import datetime
+
+        filing, user = _accepted_komprimiert_filing(
+            cover_sheet_generated_at=datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+        )
+        db = MagicMock()
+        db.get.return_value = filing
+
+        result = mark_cover_sheet_mailed(filing.id, current_user=user, db=db)
+
+        assert result.cover_sheet_mailed_at is not None
+        db.commit.assert_called_once()
+        db.refresh.assert_called_once_with(filing)

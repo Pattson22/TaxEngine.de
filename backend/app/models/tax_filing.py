@@ -22,7 +22,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from app.models.enums import FilingStatus, pg_enum
+from app.models.enums import FilingStatus, SubmissionMode, pg_enum
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -153,6 +153,22 @@ class TaxFiling(Base):
     elster_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     elster_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     elster_rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # See SubmissionMode's docstring -- KOMPRIMIERT is the only mode this
+    # project actually drives today. cover_sheet_generated_at is set the
+    # first time the PDF is downloaded (informational only, re-downloading
+    # doesn't clear it); cover_sheet_mailed_at is the taxpayer's own
+    # self-attestation that they printed, signed, and mailed it -- we have
+    # no way to verify this against the Finanzamt, so treat it as a UI
+    # checklist item, not a legal confirmation.
+    submission_mode: Mapped[SubmissionMode] = mapped_column(
+        pg_enum(SubmissionMode, "submission_mode_enum"),
+        nullable=False,
+        default=SubmissionMode.KOMPRIMIERT,
+        server_default="KOMPRIMIERT",
+    )
+    cover_sheet_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cover_sheet_mailed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))

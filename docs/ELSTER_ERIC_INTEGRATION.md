@@ -2,17 +2,26 @@
 
 ## Implementation status
 
-`backend/app/eric/` scaffolds everything below that CAN exist without a
-BZSt developer certificate: `xml_builder.py` (real XML generation, tested),
+`backend/app/eric/` scaffolds everything below that CAN exist without the
+real ERiC library: `xml_builder.py` (real XML generation, tested),
 `submission_service.py` (the full validate→submit→persist orchestration,
-wired to `POST /tax-filings/{id}/submit`), and `client.py`'s `EricClient`
+wired to `POST /tax-filings/{id}/submit`), `client.py`'s `EricClient`
 abstraction with a fully-working `StubEricClient` (always "succeeds", used
 for local dev/testing) plus a `NativeEricClient` that raises
 `NotImplementedError` with exact instructions for what completing it
-requires. The XML shape below `<Steuerfall>` is illustrative — the real
+requires, and `cover_sheet.py` (the KOMPRIMIERT paper cover sheet, see
+§6 below). The XML shape below `<Steuerfall>` is illustrative — the real
 Datenartenkatalog field names are BZSt-developer-only and not something
 this project has access to yet. See `xml_builder.py`'s docstring for the
 full caveat before this is ever pointed at a real ELSTER endpoint.
+
+**Correction to an earlier version of this doc**: obtaining the ERiC
+library itself is a *free developer registration* at
+elster.de/eportal/infoseite/entwickler, reviewed by the Bayerisches
+Landesamt für Steuern (typically approved within days, no fee) — not a
+gated "signed agreement" in the sense of a hard business blocker. What
+*is* a hard constraint, and doesn't go away once that registration is
+done, is §6 below: authentication is per-taxpayer, not per-vendor.
 
 ## What ERiC actually is (and why that shapes the architecture)
 
@@ -158,3 +167,32 @@ serialization.
   `elster_rejection_reason` populated) — this state machine is the
   single source of truth the frontend polls/subscribes to, not raw ERiC
   return codes.
+
+## 6. Authentication is per-taxpayer, not per-vendor — the KOMPRIMIERT path
+
+ELSTER submissions are authenticated with the individual taxpayer's own
+personal ELSTER certificate (registered by them directly via
+ElsterOnline, using name, date of birth, email, Finanzamt, and tax
+number — data our onboarding flow already collects) or a security
+stick/signature card. There is no vendor-wide certificate that lets
+TaxEngine.de authenticate submissions on a user's behalf; a
+Softwarezertifikat only gates access to BZSt's own portals (like the
+BOP), not third-party ESt filings made through ERiC.
+
+Until users can link their own certificate (not implemented), every
+filing this project submits uses `SubmissionMode.KOMPRIMIERT`: ERiC still
+transmits the XML (`Vorgang = send-NoSig` in `xml_builder.py`), but
+without a personal signature it isn't legally binding on its own. The
+taxpayer must additionally print, sign, and mail a paper cover sheet
+referencing the same submission — `app/eric/cover_sheet.py` generates a
+functional stand-in for this (NOT the official barcode-bearing BZSt
+printout, which only a real ERiC call can produce), served from
+`GET /tax-filings/{id}/cover-sheet` once a filing is
+SUBMITTED/ACCEPTED/REJECTED. `POST /tax-filings/{id}/mark-mailed` records
+the taxpayer's own attestation that they mailed it — self-reported, not
+verified against the Finanzamt, since we have no channel to confirm paper
+receipt.
+
+`SubmissionMode.AUTHENTIFIZIERT` is reserved on the model for the fully
+paperless path once per-user certificate linking exists, so adding it
+later doesn't need a second migration.

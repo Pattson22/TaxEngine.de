@@ -46,6 +46,8 @@ export type FilingStatus =
   | "ACCEPTED"
   | "REJECTED";
 
+export type SubmissionMode = "KOMPRIMIERT" | "AUTHENTIFIZIERT";
+
 export interface User {
   id: string;
   email: string;
@@ -141,6 +143,10 @@ export interface TaxFiling {
   elster_submitted_at: string | null;
   elster_accepted_at: string | null;
   elster_rejection_reason: string | null;
+
+  submission_mode: SubmissionMode;
+  cover_sheet_generated_at: string | null;
+  cover_sheet_mailed_at: string | null;
 
   created_at: string;
   updated_at: string;

@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import FilingStatus
+from app.models.enums import FilingStatus, SubmissionMode
 
 
 class TaxFilingCreate(BaseModel):
@@ -56,6 +56,10 @@ class TaxFilingRead(BaseModel):
     elster_submitted_at: datetime | None
     elster_accepted_at: datetime | None
     elster_rejection_reason: str | None
+
+    submission_mode: SubmissionMode
+    cover_sheet_generated_at: datetime | None
+    cover_sheet_mailed_at: datetime | None
 
     created_at: datetime
     updated_at: datetime

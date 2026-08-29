@@ -160,6 +160,24 @@ export function submitTaxFiling(token: string, filingId: string): Promise<TaxFil
   return request<TaxFiling>(`/tax-filings/${filingId}/submit`, { method: "POST", token });
 }
 
+// Binary PDF response -- can't go through request()'s JSON-only parsing.
+export async function downloadCoverSheet(token: string, filingId: string): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/tax-filings/${filingId}/cover-sheet`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const detail =
+      typeof body?.detail === "string" ? body.detail : `Request failed with status ${response.status}`;
+    throw new ApiError(response.status, detail);
+  }
+  return response.blob();
+}
+
+export function markCoverSheetMailed(token: string, filingId: string): Promise<TaxFiling> {
+  return request<TaxFiling>(`/tax-filings/${filingId}/mark-mailed`, { method: "POST", token });
+}
+
 // --- Wage tax certificates ---
 
 export function listWageTaxCertificates(

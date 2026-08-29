@@ -25,6 +25,9 @@ boto3==1.35.36             # S3-compatible object storage client
 anthropic==1.2.0           # Claude document/vision understanding for extraction
 python-docx==1.1.2         # text extraction from .docx (Claude's document blocks accept PDF/images, not docx)
 
+# --- PDF generation ---
+reportlab==4.2.5           # komprimierte Steuererklärung cover sheet (see app/eric/cover_sheet.py)
+
 # --- Testing ---
 pytest==8.3.3
 pytest-cov==5.0.0
