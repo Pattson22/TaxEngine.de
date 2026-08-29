@@ -114,6 +114,19 @@ export default function FilingDetailPage() {
   }
 
   const totalGrossWage = wageCerts.reduce((sum, c) => sum + c.gross_wage_cents, 0);
+  const totalWithheldCents =
+    wageCerts.reduce(
+      (sum, c) => sum + c.income_tax_withheld_cents + c.solidarity_surcharge_cents + c.church_tax_withheld_cents,
+      0,
+    ) +
+    capitalIncome.reduce(
+      (sum, s) =>
+        sum +
+        s.kapitalertragsteuer_withheld_cents +
+        s.solidarity_surcharge_withheld_cents +
+        s.church_tax_withheld_cents,
+      0,
+    );
   const canCalculate =
     wageCerts.length > 0 ||
     capitalIncome.length > 0 ||
@@ -354,6 +367,9 @@ export default function FilingDetailPage() {
                         value={formatCents(filing.capital_gains_church_tax_cents)}
                       />
                     )}
+                  {totalWithheldCents > 0 && (
+                    <LedgerLine label="Bereits einbehalten" value={formatCents(totalWithheldCents)} />
+                  )}
                 </Ledger>
                 <div className="mt-2 flex items-baseline justify-between border-t border-ink/15 pt-4">
                   <span className="font-display text-base font-medium text-ink">
