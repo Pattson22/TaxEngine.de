@@ -13,7 +13,7 @@ from app.models.user import User
 from app.schemas.payment import PaymentIntentResponse
 from app.schemas.tax_filing import TaxFilingCreate, TaxFilingRead, TaxFilingUpdate
 from app.services.payment_service import PaymentError, create_payment_intent_for_filing
-from app.services.tax_calculation_service import TaxCalculationError, calculate_tax_filing
+from app.services.tax_calculation_service import calculate_tax_filing
 
 router = APIRouter(prefix="/tax-filings", tags=["tax-filings"])
 
@@ -105,7 +105,11 @@ def calculate_filing(
 
     try:
         filing = calculate_tax_filing(db, current_user, filing.tax_year)
-    except TaxCalculationError as exc:
+    except ValueError as exc:
+        # ValueError, not just TaxCalculationError: get_constants_for_year()
+        # (called throughout tax_engine) raises a plain ValueError for any
+        # tax_year outside SUPPORTED_TAX_YEARS, which TaxFilingCreate's
+        # 2015-2100 range allows callers to create a filing for.
         db.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
