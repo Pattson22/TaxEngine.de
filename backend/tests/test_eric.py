@@ -22,7 +22,7 @@ from app.eric.client import (
     NativeEricClient,
     StubEricClient,
 )
-from app.eric.submission_service import SubmissionError, submit_filing
+from app.eric.submission_service import SubmissionError, enqueue_submission, submit_filing
 from app.eric.xml_builder import _cents_to_euro_str, _cents_to_whole_euro_str, build_est_xml
 from app.models.capital_income_statement import CapitalIncomeStatement
 from app.models.child import Child
@@ -31,6 +31,7 @@ from app.models.enums import (
     ChildRelationshipType,
     ChurchTaxType,
     DeductionCategory,
+    EricSubmissionJobStatus,
     FederalState,
     FilingStatus,
     TaxClass,
@@ -942,3 +943,20 @@ class TestSubmitFiling:
         assert result.status == FilingStatus.REJECTED
         assert result.elster_rejection_reason == "Finanzamt says no"
         assert result.elster_transfer_ticket == "TICKET-1"
+
+
+class TestEnqueueSubmission:
+    """enqueue_submission is additive queue infrastructure for the future
+    eric-submitter worker -- NOT wired into any route, and deliberately
+    doesn't touch submit_filing's existing synchronous behavior at all."""
+
+    def test_creates_pending_job_for_the_filing(self):
+        db = MagicMock()
+        filing = _make_filing()
+
+        job = enqueue_submission(db, filing)
+
+        assert job.tax_filing_id == filing.id
+        assert job.status == EricSubmissionJobStatus.PENDING
+        db.add.assert_called_once()
+        db.commit.assert_called_once()

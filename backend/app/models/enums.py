@@ -24,6 +24,7 @@ __all__ = [
     "ChildRelationshipType",
     "ChurchTaxType",
     "DeductionCategory",
+    "EricSubmissionJobStatus",
     "FederalState",
     "FilingStatus",
     "SubmissionMode",
@@ -112,6 +113,20 @@ class SubmissionMode(str, Enum):
 
     KOMPRIMIERT = "KOMPRIMIERT"
     AUTHENTIFIZIERT = "AUTHENTIFIZIERT"
+
+
+class EricSubmissionJobStatus(str, Enum):
+    """State of one row in `eric_submission_jobs` -- the queue the future
+    `eric-submitter` worker process polls (see
+    app/eric_submitter/worker.py and docs/ELSTER_ERIC_INTEGRATION.md
+    section 2 for why this is a SEPARATE process from the FastAPI app,
+    not an in-process background task: ERiC must never load inside the
+    web process)."""
+
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
 
 
 class ChildRelationshipType(str, Enum):

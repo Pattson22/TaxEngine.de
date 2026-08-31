@@ -149,11 +149,36 @@ Finanzamt-routing gap:
   (`ERIC_OK`).
 
 Every real Anlage this project's data model can support is now mapped in
-`xml_builder.py`. What's left before a real submission is possible is no
-longer schema research: a registered `HerstellerID`, and wiring
-`NativeEricClient` (including the new `format_steuernummer_for_elster()`
-step) into a real `eric-submitter` worker process per §2 below -- it's
-still never loaded inside the FastAPI web process.
+`xml_builder.py`.
+
+**Seventh update**: the `eric-submitter` worker §2 describes as a design
+now exists as real, working code -- `app/eric_submitter/worker.py`, plus
+an `eric_submission_jobs` Postgres-backed queue table (migration
+`a1d8e4f36b52`) and `submission_service.enqueue_submission()` to insert a
+job. The worker's claim/process/persist loop is real: `SELECT ... FOR
+UPDATE SKIP LOCKED` for concurrent-safe claiming, the same FEE_PAID/
+Steuer-ID pre-flight checks `submit_filing()` runs (re-checked at claim
+time, since a job can sit queued for a while), the idempotency check this
+doc's §5 already specified (never re-submit a filing that already has a
+`elster_transfer_ticket`), a real `format_steuernummer_for_elster()` call
+for `Vorsatz` (non-fatal if it fails -- the block is just omitted), and
+`EricBeende()` guaranteed via `finally` on worker shutdown.
+`submission_service.build_submission_xml()` was extracted so
+`submit_filing()`'s synchronous path and the worker's async one can never
+silently diverge on what XML gets built for a given filing.
+
+**Deliberately NOT done**: the worker is explicitly a reference
+implementation, not a production deployment -- no supervisor/restart
+policy, no concurrency beyond one job at a time, no graceful-shutdown
+signal handling (see the module's own docstring). `enqueue_submission()`
+is additive queue infrastructure only; no route calls it yet, and
+`submit_filing()`'s existing StubEricClient-backed synchronous behavior
+(what the frontend's submit button already depends on) is completely
+unchanged.
+
+What's left before a real submission is possible is no longer schema
+research or worker architecture: the one remaining blocker is a
+registered `HerstellerID`.
 
 **Correction to an earlier version of this doc**: obtaining the ERiC
 library itself is a *free developer registration* at
@@ -205,6 +230,18 @@ drives every decision below.
 ```
 
 ## 2. Bridging Python ↔ the C ERiC Library
+
+**Now implemented** (see the "Seventh update" above): `app/eric_submitter/
+worker.py` is a real, working reference implementation of the shape
+described below -- a Postgres-backed job table
+(`eric_submission_jobs`) rather than gRPC/Redis/SQS (simplest option that
+needs no new infra, explicitly named below as acceptable), a real
+claim/process/persist loop, and `NativeEricClient` (cffi bindings to
+`ericapi.dll`/`libericapi.so`) instantiated ONLY inside that worker
+process, never the FastAPI app. It's a reference implementation to
+harden before production use (no supervisor/restart policy yet), not a
+placeholder -- the parts that matter for correctness (the SKIP LOCKED
+claim query, the idempotency check, the ERiC lifecycle) are real.
 
 **Never load `libericapi.so`/`eric.dll` inside the main FastAPI web
 process.** Reasons:

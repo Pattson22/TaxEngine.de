@@ -6,6 +6,17 @@ Mirrors `app/services/tax_calculation_service.py`'s role for the
 calculation pipeline — this is the one place DB rows and the
 XML/ERiC-client layer meet, so `xml_builder.py` and `client.py` stay
 free of DB/session concerns.
+
+Two entry points, both real, deliberately NOT interchangeable yet:
+- `submit_filing()` -- synchronous, StubEricClient-backed by default, the
+  existing path the frontend's submit button already calls.
+- `enqueue_submission()` -- inserts an `EricSubmissionJob` row for the
+  future `eric-submitter` worker process (`app/eric_submitter/worker.py`)
+  to pick up and process with the real `NativeEricClient`. Additive queue
+  infrastructure only; not wired into any route yet.
+
+`build_submission_xml()` is shared by both, so they can never silently
+diverge on what XML actually gets built for a given filing.
 """
 
 from __future__ import annotations
@@ -20,7 +31,8 @@ from app.eric.xml_builder import build_est_xml
 from app.models.capital_income_statement import CapitalIncomeStatement
 from app.models.child import Child
 from app.models.deduction import Deduction
-from app.models.enums import FilingStatus
+from app.models.enums import EricSubmissionJobStatus, FilingStatus
+from app.models.eric_submission_job import EricSubmissionJob
 from app.models.rental_property_statement import RentalPropertyStatement
 from app.models.self_employment_statement import SelfEmploymentStatement
 from app.models.tax_filing import TaxFiling
@@ -31,6 +43,101 @@ from app.models.wage_tax_certificate import WageTaxCertificate
 class SubmissionError(ValueError):
     """A filing can't be submitted -- wrong status, missing required data
     (e.g. no Steuer-ID on file), or an ERiC validation/submission failure."""
+
+
+def datenart_version_for(filing: TaxFiling) -> str:
+    """"ESt_<Jahr>" is the real ERiC datenartVersion for an income tax
+    return, confirmed against the SDK's own Datenartversionmatrix.ods
+    (also matches the per-year plugin naming, e.g. checkESt_2024.dll)."""
+    return f"ESt_{filing.tax_year}"
+
+
+def build_submission_xml(
+    db: Session,
+    user: User,
+    filing: TaxFiling,
+    *,
+    elster_formatted_steuernummer: str | None = None,
+) -> str:
+    """Load every row `build_est_xml` needs for this user/tax_year and
+    build the E10 XML -- the one place this happens, shared by
+    `submit_filing`'s synchronous path and the future `eric-submitter`
+    worker's async one (`app/eric_submitter/worker.py`), so they can never
+    silently diverge on what gets submitted.
+
+    `elster_formatted_steuernummer` is None here by default deliberately:
+    computing it needs a real `NativeEricClient.format_steuernummer_for_elster()`
+    call, i.e. a loaded ERiC library -- exactly what must never happen
+    inside the FastAPI process `submit_filing()` runs in. Only the worker,
+    which already holds a live `NativeEricClient`, passes a real value.
+    """
+    wage_certs = (
+        db.query(WageTaxCertificate)
+        .filter(WageTaxCertificate.user_id == user.id, WageTaxCertificate.tax_year == filing.tax_year)
+        .all()
+    )
+    capital_income_statements = (
+        db.query(CapitalIncomeStatement)
+        .filter(
+            CapitalIncomeStatement.user_id == user.id,
+            CapitalIncomeStatement.tax_year == filing.tax_year,
+        )
+        .all()
+    )
+    rental_property_statements = (
+        db.query(RentalPropertyStatement)
+        .filter(
+            RentalPropertyStatement.user_id == user.id,
+            RentalPropertyStatement.tax_year == filing.tax_year,
+        )
+        .all()
+    )
+    self_employment_statements = (
+        db.query(SelfEmploymentStatement)
+        .filter(
+            SelfEmploymentStatement.user_id == user.id,
+            SelfEmploymentStatement.tax_year == filing.tax_year,
+        )
+        .all()
+    )
+    children = (
+        db.query(Child)
+        .filter(Child.user_id == user.id, Child.tax_year == filing.tax_year)
+        .all()
+    )
+    deductions = (
+        db.query(Deduction)
+        .filter(Deduction.user_id == user.id, Deduction.tax_year == filing.tax_year)
+        .all()
+    )
+    return build_est_xml(
+        user,
+        filing,
+        wage_certs,
+        capital_income_statements,
+        rental_property_statements,
+        self_employment_statements,
+        children,
+        deductions,
+        hersteller_id=settings.eric_hersteller_id,
+        finanzamt_bufa_nummer=user.finanzamt_bufa_nummer,
+        elster_formatted_steuernummer=elster_formatted_steuernummer,
+    )
+
+
+def enqueue_submission(db: Session, filing: TaxFiling) -> EricSubmissionJob:
+    """Inserts a PENDING `eric_submission_jobs` row for the future
+    `eric-submitter` worker to pick up -- see that module's and
+    `EricSubmissionJob`'s docstrings for why this is separate, additive
+    queue infrastructure, NOT wired into `submit_filing`'s existing
+    synchronous (StubEricClient-backed) path. Does not validate `filing`'s
+    status -- the worker re-checks FEE_PAID/Steuer-ID itself, the same way
+    `submit_filing` does, right before it actually submits."""
+    job = EricSubmissionJob(tax_filing_id=filing.id, status=EricSubmissionJobStatus.PENDING)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
 
 
 def submit_filing(
@@ -73,63 +180,8 @@ def submit_filing(
         )
 
     eric_client = eric_client or StubEricClient()
-
-    wage_certs = (
-        db.query(WageTaxCertificate)
-        .filter(WageTaxCertificate.user_id == user.id, WageTaxCertificate.tax_year == filing.tax_year)
-        .all()
-    )
-    capital_income_statements = (
-        db.query(CapitalIncomeStatement)
-        .filter(
-            CapitalIncomeStatement.user_id == user.id,
-            CapitalIncomeStatement.tax_year == filing.tax_year,
-        )
-        .all()
-    )
-    rental_property_statements = (
-        db.query(RentalPropertyStatement)
-        .filter(
-            RentalPropertyStatement.user_id == user.id,
-            RentalPropertyStatement.tax_year == filing.tax_year,
-        )
-        .all()
-    )
-    self_employment_statements = (
-        db.query(SelfEmploymentStatement)
-        .filter(
-            SelfEmploymentStatement.user_id == user.id,
-            SelfEmploymentStatement.tax_year == filing.tax_year,
-        )
-        .all()
-    )
-    children = (
-        db.query(Child)
-        .filter(Child.user_id == user.id, Child.tax_year == filing.tax_year)
-        .all()
-    )
-    deductions = (
-        db.query(Deduction)
-        .filter(Deduction.user_id == user.id, Deduction.tax_year == filing.tax_year)
-        .all()
-    )
-    xml = build_est_xml(
-        user,
-        filing,
-        wage_certs,
-        capital_income_statements,
-        rental_property_statements,
-        self_employment_statements,
-        children,
-        deductions,
-        hersteller_id=settings.eric_hersteller_id,
-        finanzamt_bufa_nummer=user.finanzamt_bufa_nummer,
-    )
-
-    # "ESt_<Jahr>" is the real ERiC datenartVersion for an income tax
-    # return, confirmed against the SDK's own Datenartversionmatrix.ods
-    # (also matches the per-year plugin naming, e.g. checkESt_2024.dll).
-    datenart_version = f"ESt_{filing.tax_year}"
+    xml = build_submission_xml(db, user, filing)
+    datenart_version = datenart_version_for(filing)
 
     try:
         eric_client.validate_xml(xml, datenart_version=datenart_version)

@@ -45,6 +45,7 @@ TaxEngine.de/
         │   ├── self_employment_statement.py
         │   ├── child.py               First-class Kinderfreibetrag child entities (name/DOB/Steuer-ID)
         │   ├── deduction.py
+        │   ├── eric_submission_job.py  Postgres-backed queue table for the eric-submitter worker
         │   └── tax_filing.py
         ├── schemas/                  Pydantic request/response models
         ├── services/
@@ -54,7 +55,9 @@ TaxEngine.de/
         │   ├── xml_builder.py         Domain model -> real E10 schema XML, verified against real ERiC
         │   ├── native_bindings.py     cffi bindings to the real ericapi.dll/.so
         │   ├── client.py              EricClient abstraction: StubEricClient + NativeEricClient (both real)
-        │   └── submission_service.py  Validate -> submit -> persist orchestration
+        │   └── submission_service.py  Validate -> submit -> persist orchestration (+ enqueue_submission)
+        ├── eric_submitter/           SEPARATE process/package -- the only place NativeEricClient
+        │   └── worker.py              may actually be instantiated (never inside the FastAPI app)
         ├── api/routes/               auth, users, wage-tax-certificates,
         │                             capital-income-statements, rental-property-statements,
         │                             self-employment-statements, children, deductions,

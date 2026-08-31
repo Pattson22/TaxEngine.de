@@ -12,6 +12,7 @@ from app.database import Base
 from app.models.capital_income_statement import CapitalIncomeStatement
 from app.models.child import Child
 from app.models.deduction import Deduction
+from app.models.eric_submission_job import EricSubmissionJob
 from app.models.rental_property_statement import RentalPropertyStatement
 from app.models.self_employment_statement import SelfEmploymentStatement
 from app.models.tax_filing import TaxFiling
@@ -23,6 +24,7 @@ __all__ = [
     "CapitalIncomeStatement",
     "Child",
     "Deduction",
+    "EricSubmissionJob",
     "RentalPropertyStatement",
     "SelfEmploymentStatement",
     "TaxFiling",
