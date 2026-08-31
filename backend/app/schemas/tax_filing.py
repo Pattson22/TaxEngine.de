@@ -43,6 +43,7 @@ class TaxFilingRead(BaseModel):
     capital_gains_tax_cents: int | None
     capital_gains_soli_cents: int | None
     capital_gains_church_tax_cents: int | None
+    capital_gains_progressive_election_applied: bool | None
 
     net_rental_income_cents: int | None
     net_self_employment_income_cents: int | None
@@ -51,6 +52,7 @@ class TaxFilingRead(BaseModel):
 
     altersvorsorge_deduction_cents: int | None
     sonstige_vorsorgeaufwendungen_deduction_cents: int | None
+    aussergewoehnliche_belastungen_deduction_cents: int | None
 
     processing_fee_cents: int
     fee_paid_at: datetime | None

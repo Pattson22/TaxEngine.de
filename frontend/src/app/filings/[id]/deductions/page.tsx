@@ -14,6 +14,7 @@ const CATEGORIES: { value: DeductionCategory; label: string }[] = [
   { value: "DONATIONS", label: "Donations (Spenden)" },
   { value: "CHILDCARE", label: "Childcare costs (Kinderbetreuungskosten)" },
   { value: "HANDWERKERLEISTUNGEN", label: "Craftsperson services (§35a)" },
+  { value: "AUSSERGEWOEHNLICHE_BELASTUNG", label: "Extraordinary burdens (außergewöhnliche Belastungen)" },
   { value: "WORK_EQUIPMENT", label: "Work equipment" },
   { value: "FURTHER_EDUCATION", label: "Further education" },
   { value: "DOUBLE_HOUSEHOLD", label: "Double household" },

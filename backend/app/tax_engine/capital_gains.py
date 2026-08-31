@@ -11,24 +11,37 @@ Pipeline:
       -> soli.calculate_solidaritaetszuschlag_on_capital_gains_tax()   flat 5.5%, no Freigrenze
       -> church_tax.calculate_kirchensteuer()   same function used for regular income tax
 
-Scope limitation: the "Günstigerprüfung" election (§32d Abs. 6 EStG) — a
-taxpayer whose personal marginal income tax rate is below 25% can elect to
-have capital gains taxed under the regular progressive tariff instead of
-the flat Abgeltungsteuer — is NOT implemented. This module always applies
-the flat rate, which is the correct (and mandatory, absent an election)
-outcome for any filer whose marginal rate is at or above 25%. It is also
-NOT the "greater of" comparison pattern from Werbungskosten — since 2009,
+§32d Abs. 6 EStG Günstigerprüfung: a taxpayer whose personal marginal
+income tax rate is below 25% can elect to have capital gains taxed under
+the regular progressive tariff instead of the flat Abgeltungsteuer, the
+same "run both, keep whichever is cheaper, automatically" pattern as
+tax_engine/kinderfreibetrag.py's Kindergeld/Kinderfreibetrag comparison
+(see apply_capital_gains_guenstigerpruefung below). It is also NOT the
+"greater of" comparison pattern from Werbungskosten — since 2009,
 individual investment-related costs are not separately deductible at all,
-so this is a hard subtraction, not a max().
+so the subtraction in apply_sparer_pauschbetrag is a hard subtraction,
+not a max().
+
+Scope simplification: apply_capital_gains_guenstigerpruefung folds capital
+income into the taxable income figure BEFORE any Kinderfreibetrag
+adjustment (tax_calculation_service.py's taxable_income_cents), not the
+Kinderfreibetrag-adjusted figure its own Günstigerprüfung separately
+settles on -- the two elections' interaction (whether folding capital
+gains in changes which Kinderfreibetrag path is more favorable, or vice
+versa) is not modeled. Each election is correct in isolation; a
+theoretical taxpayer exactly at the boundary of both could see a
+marginally suboptimal combined outcome.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import ROUND_DOWN, Decimal
 
 from app.tax_engine.constants import get_constants_for_year
 from app.tax_engine.core import InvalidIncomeError
 from app.tax_engine.enums import LOW_CHURCH_TAX_RATE_STATES, ChurchTaxType, FederalState
+from app.tax_engine.tax_brackets import calculate_income_tax_for_assessment
 
 _CENTS_PER_EURO = Decimal("100")
 
@@ -114,3 +127,84 @@ def calculate_kapitalertragsteuer(
     tax_euro = (income_euro * rate).quantize(Decimal("1"), rounding=ROUND_DOWN)
 
     return max(int(tax_euro) * 100, 0)
+
+
+@dataclass(frozen=True)
+class CapitalGainsGuenstigerpruefungResult:
+    """The outcome of comparing flat Abgeltungsteuer vs. folding capital
+    income into the progressive tariff (§32d Abs. 6 EStG)."""
+
+    progressive_tariff_elected: bool
+    income_tax_cents: int  # the income-tax component to actually use going forward
+    capital_gains_tax_cents: int  # the Abgeltungsteuer component to actually use (0 if elected)
+
+
+def apply_capital_gains_guenstigerpruefung(
+    taxable_income_without_capital_gains_cents: int,
+    taxable_capital_income_cents: int,
+    income_tax_without_capital_gains_cents: int,
+    flat_capital_gains_tax_cents: int,
+    is_joint_assessment: bool,
+    tax_year: int = 2024,
+) -> CapitalGainsGuenstigerpruefungResult:
+    """Run the automatic §32d Abs. 6 Günstigerprüfung and return whichever
+    treatment produces the lower COMBINED (income tax + capital gains tax)
+    total -- the taxpayer never has to apply for this, the Finanzamt keeps
+    the cheaper outcome automatically, exactly like the Kinderfreibetrag
+    comparison in kinderfreibetrag.py.
+
+    Args:
+        taxable_income_without_capital_gains_cents: zu versteuerndes
+            Einkommen from regular (non-capital) income only -- the normal
+            output of core.calculate_taxable_income (see module docstring
+            for why this is the pre-Kinderfreibetrag figure specifically).
+        taxable_capital_income_cents: capital income AFTER the
+            Sparer-Pauschbetrag (output of apply_sparer_pauschbetrag) --
+            the allowance applies regardless of which tariff wins.
+        income_tax_without_capital_gains_cents: the ALREADY-COMPUTED
+            income tax on regular income alone (post-Kinderfreibetrag/
+            tax-credit adjustments) -- kept as the flat path's income-tax
+            component if the flat path wins.
+        flat_capital_gains_tax_cents: the ALREADY-COMPUTED Abgeltungsteuer
+            (output of calculate_kapitalertragsteuer) -- the flat path's
+            other component.
+        is_joint_assessment: mirrors `users.is_joint_assessment`.
+        tax_year: which year's tariff to apply.
+
+    Returns:
+        A CapitalGainsGuenstigerpruefungResult carrying the winning
+        income_tax_cents/capital_gains_tax_cents to use for the rest of
+        the pipeline (Soli/Kirchensteuer should be computed from these,
+        not from the original flat-path figures, once this has run).
+
+    Raises:
+        InvalidIncomeError: on any negative input.
+    """
+    for label, value in (
+        ("taxable_income_without_capital_gains_cents", taxable_income_without_capital_gains_cents),
+        ("taxable_capital_income_cents", taxable_capital_income_cents),
+        ("income_tax_without_capital_gains_cents", income_tax_without_capital_gains_cents),
+        ("flat_capital_gains_tax_cents", flat_capital_gains_tax_cents),
+    ):
+        if value < 0:
+            raise InvalidIncomeError(f"{label} cannot be negative.")
+
+    combined_zve_cents = taxable_income_without_capital_gains_cents + taxable_capital_income_cents
+    income_tax_with_capital_gains_folded_in_cents = calculate_income_tax_for_assessment(
+        combined_zve_cents, tax_year, is_joint_assessment
+    )
+
+    flat_total_cents = income_tax_without_capital_gains_cents + flat_capital_gains_tax_cents
+
+    if income_tax_with_capital_gains_folded_in_cents < flat_total_cents:
+        return CapitalGainsGuenstigerpruefungResult(
+            progressive_tariff_elected=True,
+            income_tax_cents=income_tax_with_capital_gains_folded_in_cents,
+            capital_gains_tax_cents=0,
+        )
+
+    return CapitalGainsGuenstigerpruefungResult(
+        progressive_tariff_elected=False,
+        income_tax_cents=income_tax_without_capital_gains_cents,
+        capital_gains_tax_cents=flat_capital_gains_tax_cents,
+    )

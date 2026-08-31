@@ -280,6 +280,8 @@ export function createRentalPropertyStatement(
     property_address: string;
     gross_rental_income_cents: number;
     deductible_expenses_cents?: number;
+    building_acquisition_cost_cents?: number;
+    building_completion_year?: number;
   },
 ): Promise<RentalPropertyStatement> {
   return request<RentalPropertyStatement>("/rental-property-statements", {

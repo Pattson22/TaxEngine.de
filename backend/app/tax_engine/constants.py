@@ -89,6 +89,24 @@ class TaxYearConstants:
     altersvorsorge_hoechstbetrag_single_cents: int
     altersvorsorge_hoechstbetrag_joint_cents: int
 
+    # §33 Abs. 3 EStG — zumutbare Belastung (the taxpayer's own "reasonable
+    # contribution" before außergewöhnliche Belastungen become deductible),
+    # a percentage of Gesamtbetrag der Einkünfte selected by income bracket
+    # (the two thresholds below) and by column (marital status when
+    # childless, else child-count bucket -- the child columns apply
+    # regardless of marital status). Each tuple is (bracket-1 rate,
+    # bracket-2 rate, bracket-3 rate); see
+    # tax_engine/deductions/aussergewoehnliche_belastungen.py for why the
+    # three brackets are applied in a STAGED/tiered manner (BFH VI R 75/14,
+    # 2017), not by picking one rate for the whole amount. Unchanged for
+    # many years, not indexed.
+    zumutbare_belastung_bracket_1_threshold_cents: int
+    zumutbare_belastung_bracket_2_threshold_cents: int
+    zumutbare_belastung_rates_single_no_children: tuple[Decimal, Decimal, Decimal]
+    zumutbare_belastung_rates_joint_no_children: tuple[Decimal, Decimal, Decimal]
+    zumutbare_belastung_rates_one_or_two_children: tuple[Decimal, Decimal, Decimal]
+    zumutbare_belastung_rates_three_plus_children: tuple[Decimal, Decimal, Decimal]
+
     # §10 Abs. 4 EStG — sonstige Vorsorgeaufwendungen (health/long-term-care/
     # unemployment insurance etc.). Basiskranken- und Pflegepflichtversicherung
     # are always fully deductible with NO cap (Bürgerentlastungsgesetz
@@ -188,6 +206,12 @@ TAX_YEAR_2024 = TaxYearConstants(
     altersvorsorge_hoechstbetrag_joint_cents=55_130_00,   # €55,130 (exactly double)
     sonstige_vorsorgeaufwendungen_hoechstbetrag_single_cents=190_000,  # €1,900 (employee rate)
     sonstige_vorsorgeaufwendungen_hoechstbetrag_joint_cents=380_000,   # €3,800 (doubled)
+    zumutbare_belastung_bracket_1_threshold_cents=15_340_00,   # €15,340
+    zumutbare_belastung_bracket_2_threshold_cents=51_130_00,   # €51,130
+    zumutbare_belastung_rates_single_no_children=(Decimal("0.05"), Decimal("0.06"), Decimal("0.07")),
+    zumutbare_belastung_rates_joint_no_children=(Decimal("0.04"), Decimal("0.05"), Decimal("0.06")),
+    zumutbare_belastung_rates_one_or_two_children=(Decimal("0.02"), Decimal("0.03"), Decimal("0.04")),
+    zumutbare_belastung_rates_three_plus_children=(Decimal("0.01"), Decimal("0.01"), Decimal("0.02")),
     spenden_deduction_cap_percentage=Decimal("0.20"),
     childcare_deductible_fraction=Decimal("0.6667"),  # 2/3, per 2024 law (raised to 80% from 2025)
     childcare_max_deductible_cents_per_child=400_000,  # €4,000/child (2024)

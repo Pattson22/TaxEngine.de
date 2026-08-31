@@ -78,6 +78,11 @@ class TaxFiling(Base):
             "OR sonstige_vorsorgeaufwendungen_deduction_cents >= 0",
             name="chk_filings_sonstige_vorsorge_nonneg",
         ),
+        CheckConstraint(
+            "aussergewoehnliche_belastungen_deduction_cents IS NULL "
+            "OR aussergewoehnliche_belastungen_deduction_cents >= 0",
+            name="chk_filings_aussergewoehnliche_belastungen_nonneg",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -129,6 +134,16 @@ class TaxFiling(Base):
     capital_gains_soli_cents: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     capital_gains_church_tax_cents: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
+    # §32d Abs. 6 EStG Günstigerprüfung outcome (see
+    # tax_engine/capital_gains.py's apply_capital_gains_guenstigerpruefung)
+    # -- True means capital income was folded into the progressive tariff
+    # instead of the flat Abgeltungsteuer because that was cheaper, in
+    # which case capital_gains_tax_cents above is 0 and income_tax_cents
+    # already reflects the combined figure. NULL until first calculated.
+    capital_gains_progressive_election_applied: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True
+    )
+
     # Net Einkünfte aus Vermietung und Verpachtung (§21 EStG) across all of
     # the user's rental_property_statements for the year -- see
     # tax_engine/rental_income.py. Deliberately has NO non-negativity
@@ -160,6 +175,15 @@ class TaxFiling(Base):
     # against the small §10c Sonderausgaben-Pauschbetrag).
     altersvorsorge_deduction_cents: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     sonstige_vorsorgeaufwendungen_deduction_cents: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
+
+    # Außergewöhnliche Belastungen (§33 EStG, see
+    # tax_engine/deductions/aussergewoehnliche_belastungen.py) -- also its
+    # own line item for the same reason as the two fields above: a
+    # dedicated threshold mechanism (zumutbare Belastung), never compared
+    # against the small §10c Sonderausgaben-Pauschbetrag.
+    aussergewoehnliche_belastungen_deduction_cents: Mapped[int | None] = mapped_column(
         BigInteger, nullable=True
     )
 

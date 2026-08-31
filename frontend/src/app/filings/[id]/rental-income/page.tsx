@@ -23,11 +23,15 @@ export default function AddRentalIncomePage() {
     const formData = new FormData(event.currentTarget);
     try {
       const filing = await getTaxFiling(token, id);
+      const buildingCost = String(formData.get("building_acquisition_cost") || "");
+      const completionYear = String(formData.get("building_completion_year") || "");
       await createRentalPropertyStatement(token, {
         tax_year: filing.tax_year,
         property_address: String(formData.get("property_address")),
         gross_rental_income_cents: eurosToCents(String(formData.get("gross_rental_income"))),
         deductible_expenses_cents: eurosToCents(String(formData.get("deductible_expenses") || "0")),
+        ...(buildingCost ? { building_acquisition_cost_cents: eurosToCents(buildingCost) } : {}),
+        ...(completionYear ? { building_completion_year: Number(completionYear) } : {}),
       });
       router.push(`/filings/${id}`);
     } catch (err) {
@@ -65,8 +69,37 @@ export default function AddRentalIncomePage() {
             <Label htmlFor="deductible_expenses">Deductible expenses, €</Label>
             <Input id="deductible_expenses" name="deductible_expenses" type="number" step="0.01" min="0" />
             <p className="mt-1.5 text-xs text-ink/40">
-              Maintenance, interest, insurance, management fees, and similar — not the AfA
-              depreciation schedule, which this MVP doesn&apos;t compute automatically yet.
+              Maintenance, interest, insurance, management fees, and similar — excluding AfA
+              depreciation if you fill in the building details below (we&apos;ll compute that
+              automatically); include it here yourself otherwise.
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="building_acquisition_cost">Building acquisition cost, € (optional)</Label>
+            <Input
+              id="building_acquisition_cost"
+              name="building_acquisition_cost"
+              type="number"
+              step="0.01"
+              min="0"
+            />
+            <p className="mt-1.5 text-xs text-ink/40">
+              The building&apos;s own purchase price, excluding land — land doesn&apos;t depreciate.
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="building_completion_year">Building completion year (optional)</Label>
+            <Input
+              id="building_completion_year"
+              name="building_completion_year"
+              type="number"
+              min="1800"
+              max="2100"
+              step="1"
+            />
+            <p className="mt-1.5 text-xs text-ink/40">
+              When the building was completed (Baujahr) — sets the AfA rate (3% from 2023, 2%
+              1925–2022, 2.5% before 1925). Both fields are needed for us to compute AfA for you.
             </p>
           </div>
           <div className="flex gap-3 pt-2">

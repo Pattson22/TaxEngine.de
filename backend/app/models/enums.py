@@ -73,6 +73,14 @@ class DeductionCategory(str, Enum):
     DONATIONS = "DONATIONS"
     CHILDCARE = "CHILDCARE"
     HANDWERKERLEISTUNGEN = "HANDWERKERLEISTUNGEN"
+    # Außergewöhnliche Belastungen (§33 EStG) -- documented extraordinary
+    # costs (medical, disability, etc.), aggregated across all rows of
+    # this category for the year and run through its own zumutbare-
+    # Belastung threshold (see tax_engine/deductions/
+    # aussergewoehnliche_belastungen.py), NOT the Sonderausgaben-
+    # Pauschbetrag pipeline other categories below use -- so this is
+    # skipped in the per-row dispatch loop the same way DONATIONS is.
+    AUSSERGEWOEHNLICHE_BELASTUNG = "AUSSERGEWOEHNLICHE_BELASTUNG"
     # Kirchensteuer actually PAID (§10 Abs. 1 Nr. 4 EStG) -- e.g. direct
     # quarterly payments to the Kirchensteueramt -- as opposed to church
     # tax already WITHHELD via wage/capital income (wage_tax_certificates.

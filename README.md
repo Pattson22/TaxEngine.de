@@ -72,8 +72,10 @@ TaxEngine.de/
             ├── tax_brackets.py       §32a EStG tariff: Grundtarif + Splittingtarif
             ├── soli.py               Solidaritätszuschlag (regular + flat capital-gains variant)
             ├── church_tax.py         Kirchensteuer + Kappung (capping)
-            ├── capital_gains.py      Abgeltungsteuer (§32d EStG) + Sparer-Pauschbetrag
+            ├── capital_gains.py      Abgeltungsteuer (§32d EStG) + Sparer-Pauschbetrag +
+            │                         §32d Abs. 6 progressive-tariff Günstigerprüfung
             ├── rental_income.py      §21 EStG net rental income (signed -- losses offset other income)
+            ├── afa.py                §7 Abs. 4 EStG linear building depreciation (AfA)
             ├── self_employment_income.py   §15/§18 EStG simplified EÜR (Gewerbesteuer NOT modeled)
             ├── kinderfreibetrag.py   Kinderfreibetrag vs. Kindergeld Günstigerprüfung (§31 EStG)
             ├── deductions/
@@ -81,7 +83,8 @@ TaxEngine.de/
             │   ├── home_office.py    Homeoffice-Pauschale
             │   ├── donations.py      Spenden (§10b EStG) + Spendenvortrag carry-forward
             │   ├── childcare.py      Kinderbetreuungskosten (§10 Abs. 1 Nr. 5 EStG)
-            │   └── vorsorgeaufwand.py  Altersvorsorge + sonstige Vorsorgeaufwendungen (§10 Abs. 1 Nr. 2/3/3a EStG)
+            │   ├── vorsorgeaufwand.py  Altersvorsorge + sonstige Vorsorgeaufwendungen (§10 Abs. 1 Nr. 2/3/3a EStG)
+            │   └── aussergewoehnliche_belastungen.py  §33 EStG extraordinary burdens (staged zumutbare Belastung)
             └── tax_credits/
                 └── handwerkerleistungen.py   §35a credit against final tax
 ```

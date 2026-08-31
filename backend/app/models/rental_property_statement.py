@@ -31,6 +31,15 @@ class RentalPropertyStatement(Base):
         CheckConstraint(
             "deductible_expenses_cents >= 0", name="chk_rental_property_expenses_nonneg"
         ),
+        CheckConstraint(
+            "building_acquisition_cost_cents IS NULL OR building_acquisition_cost_cents >= 0",
+            name="chk_rental_property_building_cost_nonneg",
+        ),
+        CheckConstraint(
+            "building_completion_year IS NULL "
+            "OR building_completion_year BETWEEN 1800 AND 2100",
+            name="chk_rental_property_completion_year_range",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -49,6 +58,16 @@ class RentalPropertyStatement(Base):
     deductible_expenses_cents: Mapped[int] = mapped_column(
         BigInteger, nullable=False, default=0, server_default=text("0")
     )
+
+    # Optional structured AfA input (§7 Abs. 4 EStG, see tax_engine/afa.py)
+    # -- BOTH must be set for AfA to be computed automatically and ADDED on
+    # top of deductible_expenses_cents above. When either is NULL (the
+    # default), deductible_expenses_cents is treated as the complete
+    # Werbungskosten figure, matching this project's original behavior
+    # where any AfA had to be pre-computed and folded in manually --
+    # see tax_calculation_service.py for exactly how the two paths differ.
+    building_acquisition_cost_cents: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    building_completion_year: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
 

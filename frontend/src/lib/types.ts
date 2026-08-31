@@ -36,6 +36,7 @@ export type DeductionCategory =
   | "DONATIONS"
   | "CHILDCARE"
   | "HANDWERKERLEISTUNGEN"
+  | "AUSSERGEWOEHNLICHE_BELASTUNG"
   | "OTHER";
 
 export type FilingStatus =
@@ -137,6 +138,7 @@ export interface TaxFiling {
   capital_gains_tax_cents: number | null;
   capital_gains_soli_cents: number | null;
   capital_gains_church_tax_cents: number | null;
+  capital_gains_progressive_election_applied: boolean | null;
 
   net_rental_income_cents: number | null;
   net_self_employment_income_cents: number | null;
@@ -145,6 +147,7 @@ export interface TaxFiling {
 
   altersvorsorge_deduction_cents: number | null;
   sonstige_vorsorgeaufwendungen_deduction_cents: number | null;
+  aussergewoehnliche_belastungen_deduction_cents: number | null;
 
   processing_fee_cents: number;
   fee_paid_at: string | null;
@@ -179,6 +182,8 @@ export interface RentalPropertyStatement {
   property_address: string;
   gross_rental_income_cents: number;
   deductible_expenses_cents: number;
+  building_acquisition_cost_cents: number | null;
+  building_completion_year: number | null;
   created_at: string;
 }
 

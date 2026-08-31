@@ -27,7 +27,12 @@ from app.schemas.deduction import (
     HandwerkerleistungenDetails,
     HomeOfficeDetails,
 )
-from app.tax_engine.capital_gains import apply_sparer_pauschbetrag, calculate_kapitalertragsteuer
+from app.tax_engine.afa import calculate_afa_deduction
+from app.tax_engine.capital_gains import (
+    apply_capital_gains_guenstigerpruefung,
+    apply_sparer_pauschbetrag,
+    calculate_kapitalertragsteuer,
+)
 from app.tax_engine.church_tax import apply_kirchensteuer_kappung, calculate_kirchensteuer
 from app.tax_engine.constants import SUPPORTED_TAX_YEARS
 from app.tax_engine.core import (
@@ -36,6 +41,9 @@ from app.tax_engine.core import (
     apply_sonderausgaben_pauschbetrag,
     calculate_taxable_income,
     calculate_werbungskosten,
+)
+from app.tax_engine.deductions.aussergewoehnliche_belastungen import (
+    calculate_aussergewoehnliche_belastungen_deduction,
 )
 from app.tax_engine.deductions.childcare import calculate_childcare_deduction
 from app.tax_engine.deductions.commute import calculate_entfernungspauschale
@@ -180,10 +188,20 @@ def calculate_tax_filing(db: Session, user: User, tax_year: int) -> TaxFiling:
     # than summing gross income and expenses separately -- a loss on one
     # property and a gain on another correctly net against each other here,
     # matching how §21 EStG income is assessed per taxpayer, not per property.
-    net_rental_income_cents = sum(
-        calculate_rental_income(s.gross_rental_income_cents, s.deductible_expenses_cents)
-        for s in rental_statements
-    )
+    net_rental_income_cents = 0
+    for s in rental_statements:
+        deductible_expenses_cents = s.deductible_expenses_cents
+        # AfA is only added automatically when BOTH structured fields are
+        # present (see RentalPropertyStatement's docstring) -- otherwise
+        # deductible_expenses_cents is trusted as the complete figure,
+        # exactly matching this project's original pre-AfA behavior.
+        if s.building_acquisition_cost_cents is not None and s.building_completion_year is not None:
+            deductible_expenses_cents += calculate_afa_deduction(
+                s.building_acquisition_cost_cents, s.building_completion_year
+            )
+        net_rental_income_cents += calculate_rental_income(
+            s.gross_rental_income_cents, deductible_expenses_cents
+        )
 
     self_employment_statements = (
         db.query(SelfEmploymentStatement)
@@ -225,6 +243,8 @@ def calculate_tax_filing(db: Session, user: User, tax_year: int) -> TaxFiling:
     for deduction in deductions:
         if deduction.category == DeductionCategory.DONATIONS:
             continue  # handled separately below via _aggregate_donations_this_year
+        if deduction.category == DeductionCategory.AUSSERGEWOEHNLICHE_BELASTUNG:
+            continue  # handled separately below -- own zumutbare-Belastung threshold, not a per-row resolve
 
         amount_cents = _resolve_deduction_amount_cents(deduction, tax_year)
 
@@ -255,6 +275,17 @@ def calculate_tax_filing(db: Session, user: User, tax_year: int) -> TaxFiling:
     )
     sonderausgaben_real_cents += spendenvortrag.deductible_this_year_cents
 
+    aussergewoehnliche_belastungen_costs_cents = _aggregate_aussergewoehnliche_belastungen_this_year(
+        deductions
+    )
+    aussergewoehnliche_belastungen_deduction_cents = calculate_aussergewoehnliche_belastungen_deduction(
+        aussergewoehnliche_belastungen_costs_cents,
+        gesamtbetrag_der_einkuenfte_cents,
+        user.is_joint_assessment,
+        filing.number_of_children,
+        tax_year,
+    )
+
     werbungskosten_real_cents = calculate_werbungskosten(werbungskosten_lines)
     werbungskosten_applied_cents = apply_pauschbetrag_or_actual(werbungskosten_real_cents, tax_year)
     sonderausgaben_applied_cents = apply_sonderausgaben_pauschbetrag(
@@ -264,7 +295,9 @@ def calculate_tax_filing(db: Session, user: User, tax_year: int) -> TaxFiling:
     taxable_income_cents = calculate_taxable_income(
         gross_income_cents,
         werbungskosten_applied_cents,
-        sonderausgaben_applied_cents + vorsorgeaufwand_deduction_cents,
+        sonderausgaben_applied_cents
+        + vorsorgeaufwand_deduction_cents
+        + aussergewoehnliche_belastungen_deduction_cents,
         other_income_categories_cents=net_other_income_categories_cents,
     )
     guenstigerpruefung = apply_kinderfreibetrag_guenstigerpruefung(
@@ -277,6 +310,30 @@ def calculate_tax_filing(db: Session, user: User, tax_year: int) -> TaxFiling:
     income_tax_cents = guenstigerpruefung.final_income_tax_cents
     income_tax_after_credits_cents = apply_tax_credit(income_tax_cents, handwerker_credit_cents)
 
+    # Capital gains (Abgeltungsteuer) is computed under a wholly separate
+    # flat-rate regime -- see tax_engine/capital_gains.py's module
+    # docstring for why it is not folded into the veranlagte Einkommensteuer
+    # pipeline above BY DEFAULT. apply_capital_gains_guenstigerpruefung
+    # (§32d Abs. 6 EStG) then automatically elects to fold it in anyway
+    # when that's cheaper -- this MUST run before soli/church tax below,
+    # since both are computed from whichever income_tax figure wins here.
+    taxable_capital_income_cents = apply_sparer_pauschbetrag(
+        gross_capital_income_cents, user.is_joint_assessment, tax_year
+    )
+    flat_capital_gains_tax_cents = calculate_kapitalertragsteuer(
+        taxable_capital_income_cents, user.church_tax_type, user.residence_state, tax_year
+    )
+    capital_gains_guenstigerpruefung = apply_capital_gains_guenstigerpruefung(
+        taxable_income_cents,
+        taxable_capital_income_cents,
+        income_tax_after_credits_cents,
+        flat_capital_gains_tax_cents,
+        user.is_joint_assessment,
+        tax_year,
+    )
+    income_tax_after_credits_cents = capital_gains_guenstigerpruefung.income_tax_cents
+    capital_gains_tax_cents = capital_gains_guenstigerpruefung.capital_gains_tax_cents
+
     soli_cents = calculate_solidaritaetszuschlag(
         income_tax_after_credits_cents, user.is_joint_assessment, tax_year
     )
@@ -287,20 +344,13 @@ def calculate_tax_filing(db: Session, user: User, tax_year: int) -> TaxFiling:
     # base (taxable_income_cents); the capital-gains church tax below is
     # left uncapped -- see church_tax.py's module docstring for why the
     # capping mechanism's interaction with Abgeltungsteuer isn't modeled.
+    # Deliberately still keyed on taxable_income_cents (not the combined
+    # figure) even when the §32d Abs. 6 election wins, for the same reason
+    # -- see capital_gains.py's module docstring's own scope note.
     church_tax_cents = apply_kirchensteuer_kappung(
         church_tax_standard_cents, taxable_income_cents, user.residence_state, tax_year
     )
 
-    # Capital gains (Abgeltungsteuer) is computed under a wholly separate
-    # flat-rate regime -- see tax_engine/capital_gains.py's module
-    # docstring for why it is not folded into the veranlagte Einkommensteuer
-    # pipeline above.
-    taxable_capital_income_cents = apply_sparer_pauschbetrag(
-        gross_capital_income_cents, user.is_joint_assessment, tax_year
-    )
-    capital_gains_tax_cents = calculate_kapitalertragsteuer(
-        taxable_capital_income_cents, user.church_tax_type, user.residence_state, tax_year
-    )
     capital_gains_soli_cents = calculate_solidaritaetszuschlag_on_capital_gains_tax(
         capital_gains_tax_cents, tax_year
     )
@@ -328,11 +378,15 @@ def calculate_tax_filing(db: Session, user: User, tax_year: int) -> TaxFiling:
     filing.capital_gains_tax_cents = capital_gains_tax_cents
     filing.capital_gains_soli_cents = capital_gains_soli_cents
     filing.capital_gains_church_tax_cents = capital_gains_church_tax_cents
+    filing.capital_gains_progressive_election_applied = (
+        capital_gains_guenstigerpruefung.progressive_tariff_elected
+    )
     filing.net_rental_income_cents = net_rental_income_cents
     filing.net_self_employment_income_cents = net_self_employment_income_cents
     filing.donation_carryforward_out_cents = spendenvortrag.carryforward_out_cents
     filing.altersvorsorge_deduction_cents = altersvorsorge_deduction_cents
     filing.sonstige_vorsorgeaufwendungen_deduction_cents = sonstige_vorsorgeaufwendungen_deduction_cents
+    filing.aussergewoehnliche_belastungen_deduction_cents = aussergewoehnliche_belastungen_deduction_cents
     filing.estimated_refund_cents = estimated_refund_cents
     filing.status = FilingStatus.CALCULATED
 
@@ -347,7 +401,9 @@ def _resolve_deduction_amount_cents(deduction: Deduction, tax_year: int) -> int:
     the client-submitted `amount_claimed_cents` for categories with no
     dedicated algorithm yet (see docs/TAXFIX_GAP_ANALYSIS.md).
 
-    DONATIONS is NOT handled here -- see _aggregate_donations_this_year."""
+    DONATIONS and AUSSERGEWOEHNLICHE_BELASTUNG are NOT handled here -- see
+    _aggregate_donations_this_year and
+    _aggregate_aussergewoehnliche_belastungen_this_year respectively."""
     category = deduction.category
 
     try:
@@ -402,3 +458,17 @@ def _aggregate_donations_this_year(deductions: list[Deduction]) -> int:
             ) from exc
         total_cents += details.amount_donated_cents
     return total_cents
+
+
+def _aggregate_aussergewoehnliche_belastungen_this_year(deductions: list[Deduction]) -> int:
+    """Sum `amount_claimed_cents` across every AUSSERGEWOEHNLICHE_BELASTUNG
+    row for the year -- self-reported like INSURANCE/CHURCH_TAX_PAID/OTHER
+    (no dedicated `details` schema), but kept separate from
+    _resolve_deduction_amount_cents because the zumutbare Belastung
+    threshold (calculate_aussergewoehnliche_belastungen_deduction) applies
+    to the COMBINED total across all rows, not to each row independently."""
+    return sum(
+        deduction.amount_claimed_cents or 0
+        for deduction in deductions
+        if deduction.category == DeductionCategory.AUSSERGEWOEHNLICHE_BELASTUNG
+    )

@@ -445,6 +445,14 @@ export default function FilingDetailPage() {
                         tone="negative"
                       />
                     )}
+                  {filing.aussergewoehnliche_belastungen_deduction_cents !== null &&
+                    filing.aussergewoehnliche_belastungen_deduction_cents > 0 && (
+                      <LedgerLine
+                        label="Außergewöhnliche Belastungen"
+                        value={formatCents(filing.aussergewoehnliche_belastungen_deduction_cents)}
+                        tone="negative"
+                      />
+                    )}
                   <LedgerLine label="Taxable income (zvE)" value={formatCents(filing.taxable_income_cents)} />
                   <LedgerLine label="Income tax" value={formatCents(filing.income_tax_cents)} />
                   <LedgerLine
@@ -457,6 +465,12 @@ export default function FilingDetailPage() {
                       label="Capital gains tax (Abgeltungsteuer)"
                       value={formatCents(filing.capital_gains_tax_cents)}
                     />
+                  )}
+                  {filing.capital_gains_progressive_election_applied && (
+                    <p className="pb-2 text-xs text-ink/40">
+                      Günstigerprüfung: your capital gains were taxed at your regular income tax
+                      rate instead of the flat Abgeltungsteuer, since that worked out cheaper.
+                    </p>
                   )}
                   {filing.capital_gains_soli_cents !== null && filing.capital_gains_soli_cents > 0 && (
                     <LedgerLine
