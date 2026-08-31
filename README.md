@@ -140,7 +140,7 @@ is handled explicitly in the migration file itself.
 | `POST /tax-filings/{id}/calculate` | Runs the full `tax_engine` pipeline, persists the refund breakdown |
 | `POST /tax-filings/{id}/payment-intent` | Creates a Stripe PaymentIntent for the flat fee |
 | `POST /webhooks/stripe` | Stripe webhook (signature-verified, no JWT) — marks the fee paid |
-| `POST /tax-filings/{id}/submit` | Submits to ELSTER via the ERiC scaffold (`StubEricClient` until a real BZSt certificate exists) |
+| `POST /tax-filings/{id}/submit` | Submits to ELSTER via the ERiC scaffold (`StubEricClient` by default — `NativeEricClient` is real and verified against the actual ERiC library but not yet wired into this route, see `docs/ELSTER_ERIC_INTEGRATION.md`) |
 
 `POST /tax-filings/{id}/calculate` is the integration point worth reading
 first: `app/services/tax_calculation_service.py` loads a user's wage
@@ -220,9 +220,16 @@ Backend is feature-complete for the roadmap in `docs/TAXFIX_GAP_ANALYSIS.md`:
 employee income, capital gains, rental income, self-employment income,
 Splittingtarif, Kinderfreibetrag/Kindergeld Günstigerprüfung, Soli,
 Kirchensteuer + Kappung, Spendenvortrag carry-forward, the §35a
-Handwerkerleistungen credit, real Stripe payment integration, and an ERiC
-submission scaffold (blocked only on an actual BZSt developer
-certificate — see `docs/ELSTER_ERIC_INTEGRATION.md`).
+Handwerkerleistungen credit, real Stripe payment integration, and a real
+`cffi` binding to the ERiC library — verified end-to-end against the
+actual proprietary DLL, including a real `EricCheckXML()` pass for a
+filing combining wage, capital, rental, and self-employment income — with
+`xml_builder.py`'s payload now mapped to the real E10 schema for every
+income type except children (Kinderfreibetrag, blocked on a data-model
+gap, not schema research); see `docs/ELSTER_ERIC_INTEGRATION.md` for
+exactly what's mapped, what's still open, and the two remaining gaps (a
+registered `HerstellerID` and each filer's Finanzamt BuFa-Nummer) before a
+real submission is possible.
 
 Frontend (`frontend/`) covers the golden path — register, dashboard, add
 wage income, add a deduction, calculate, view the refund breakdown, pay via
@@ -237,6 +244,9 @@ was click-tested in a real browser, not just built; see
 Not yet implemented: capital-gains Günstigerprüfung (§32d Abs. 6 EStG
 election to use the progressive tariff instead of Abgeltungsteuer),
 Kinderfreibetrag as first-class child entities (currently a plain count,
-see `kinderfreibetrag.py`'s docstring), AfA depreciation schedules for
-rental income, Gewerbesteuer for self-employment, a real `NativeEricClient`,
+see `kinderfreibetrag.py`'s docstring — also why Anlage Kind isn't in
+`xml_builder.py` yet), AfA depreciation schedules for rental income,
+Gewerbesteuer for self-employment, a registered ELSTER `HerstellerID` and
+per-filer Finanzamt routing data (both needed before `NativeEricClient`
+can be pointed at a real submission — see `docs/ELSTER_ERIC_INTEGRATION.md`),
 frontend forms for the remaining income types, and automated frontend tests.

@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.eric.client import EricClient, EricSubmissionError, EricValidationError, StubEricClient
 from app.eric.xml_builder import build_est_xml
 from app.models.capital_income_statement import CapitalIncomeStatement
@@ -105,6 +106,7 @@ def submit_filing(
         capital_income_statements,
         rental_property_statements,
         self_employment_statements,
+        hersteller_id=settings.eric_hersteller_id,
     )
 
     # "ESt_<Jahr>" is the real ERiC datenartVersion for an income tax

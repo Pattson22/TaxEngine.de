@@ -34,6 +34,56 @@ still open, deliberately not attempted in that same pass:
   and threaded through `EricClient.validate_xml()`/`submit()` from
   `TaxFiling.tax_year`.
 
+**Second update**: `xml_builder.py` now maps a real subset of the E10
+schema instead of an illustrative placeholder -- the transfer envelope,
+`ESt1A` personal data (primary filer + spouse when jointly assessed), and
+`N` (Anlage N wage income). Every `E0######` field code was cross-checked
+against the SDK's own `E10-2024.xsd` `<xs:documentation>` annotations, not
+guessed. Capital income (`KAP`), rental income (`V`), self-employment
+(ambiguously `G` or `S` in the real schema -- this project's data model
+doesn't distinguish which), children (`Kind`), and donations/church tax
+(`SA`) are deliberately NOT serialized yet -- see `xml_builder.py`'s module
+docstring. There is also no "computed tax" element in the real schema at
+all; the old illustrative `<Berechnung>` block (which submitted
+`tax_engine`'s own totals) is gone -- ERiC/the Finanzamt compute the
+assessment from declared income, never the other way around.
+
+Generated output was round-tripped through the real `EricCheckXML()`
+against `datenartVersion="ESt_2024"` (not just unit-tested), which caught
+two real bugs neither code review nor the SDK's prose would have surfaced:
+decimal fields need a COMMA separator (`"67554,76"`, matching German
+number formatting), not a period, and `NutzdatenTicket` has a 32-character
+max length, so a dashed UUID (36 chars) is rejected -- `.hex` fixes it.
+After both fixes, a filing with wage income, a supplied `HerstellerID`,
+and a supplied Finanzamt BuFa-Nummer passes `EricCheckXML()` cleanly
+(`ERIC_OK`).
+
+**Third update**: `xml_builder.py` now also maps capital income (`KAP`),
+rental income (`V`), and self-employment (`S`) -- the previously
+deliberately-omitted Anlagen. `S`, not `G`, was the correct pick:
+`tax_engine/self_employment_income.py`'s own docstring already says its
+math is "correct for freelancers/liberal professions", which is exactly
+what `S` (§18 EStG) represents in the real schema, vs. `G` (§15 EStG,
+Gewerbebetrieb, which would also need unmodeled Gewerbesteuer). Anlage S
+only carries the aggregated net profit -- a full itemized
+Einnahmen-Überschuss-Rechnung is a separate Datenart (`EUER`) this project
+doesn't build. `V`'s per-property expenses are filed under the schema's
+generic "Sonstiges" bucket, not a specific category like AfA, since this
+project doesn't compute a depreciation schedule and claiming one would
+misrepresent the expense type. Children (`Kind`) stay unmapped -- blocked
+on the same "children as a plain count, not first-class entities" gap
+`kinderfreibetrag.py` already documents, not a missing-schema-research
+problem like the others were.
+
+Real-library round-tripping again caught a bug unit tests alone couldn't:
+`KiSt_Pfl`'s church-tax-liability flag (`E1900601`) is typed
+`Ja1BaseCType` (valid value `"1"`), not the `JaXBaseCType` (`"X"`) used
+everywhere else in this file -- `EricCheckXML()` rejected `"X"` with a
+real `'value 'X' not in enumeration'` error. After the fix, a single
+document combining wage income, capital income, two rental properties,
+self-employment, and (separately) joint assessment with a spouse and two
+rental properties all pass `EricCheckXML()` cleanly (`ERIC_OK`).
+
 **Correction to an earlier version of this doc**: obtaining the ERiC
 library itself is a *free developer registration* at
 elster.de/eportal/infoseite/entwickler, reviewed by the Bayerisches

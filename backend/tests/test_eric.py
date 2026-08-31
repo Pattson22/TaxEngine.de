@@ -8,6 +8,8 @@ prove its own orchestration logic.
 
 import os
 import uuid
+import xml.etree.ElementTree as ET
+from datetime import date
 from unittest.mock import MagicMock
 
 import pytest
@@ -21,7 +23,7 @@ from app.eric.client import (
     StubEricClient,
 )
 from app.eric.submission_service import SubmissionError, submit_filing
-from app.eric.xml_builder import _cents_to_euro_str, build_est_xml
+from app.eric.xml_builder import _cents_to_euro_str, _cents_to_whole_euro_str, build_est_xml
 from app.models.capital_income_statement import CapitalIncomeStatement
 from app.models.enums import ChurchTaxType, FederalState, FilingStatus, TaxClass
 from app.models.rental_property_statement import RentalPropertyStatement
@@ -38,9 +40,15 @@ def _make_user(**overrides) -> User:
         first_name="Anna",
         last_name="Muster",
         tax_identification_number="12345678901",
+        date_of_birth=date(1988, 7, 9),
+        street="Hermann-Geib-Str.",
+        house_number="3",
+        postal_code="93047",
+        city="Regensburg",
         residence_state=FederalState.BERLIN,
         tax_class=TaxClass.I,
         church_tax_type=ChurchTaxType.NONE,
+        is_joint_assessment=False,
     )
     defaults.update(overrides)
     return User(**defaults)
@@ -61,121 +69,340 @@ def _make_filing(**overrides) -> TaxFiling:
 
 
 class TestXmlBuilder:
-    def test_produces_well_formed_xml_with_expected_fields(self):
+    """Every field code asserted here is a real E10 identifier, verified
+    against the ERiC 44.2.4.1 SDK's own E10-2024.xsd schema annotations
+    and est_e10_2024.xml example (see xml_builder.py's module docstring) --
+    not the old illustrative element names."""
+
+    def test_produces_well_formed_real_envelope(self):
         user = _make_user()
         filing = _make_filing()
-        wtc = WageTaxCertificate(
-            employer_name="Muster GmbH", gross_wage_cents=45_000_00, income_tax_withheld_cents=2_500_00
+
+        xml = build_est_xml(user, filing, [], hersteller_id="12345")
+
+        root = ET.fromstring(xml)
+        assert root.tag.endswith("Elster")
+        assert xml.count("http://www.elster.de/elsterxml/schema/v11") >= 1
+        assert "<HerstellerID>12345</HerstellerID>" in xml
+        assert "<Vorgang>send-NoSig</Vorgang>" in xml  # unauthenticated/KOMPRIMIERT
+        assert 'xmlns="http://finkonsens.de/elster/elstererklaerung/est/e10/v2024"' in xml
+        assert '<E10 xmlns=' in xml and 'version="2024"' in xml
+
+    def test_hersteller_id_is_required(self):
+        with pytest.raises(TypeError):
+            build_est_xml(_make_user(), _make_filing(), [])  # type: ignore[call-arg]
+
+    def test_maps_primary_filer_personal_data(self):
+        user = _make_user(
+            first_name="Horst",
+            last_name="Mustermann",
+            tax_identification_number="12345678901",
+            date_of_birth=date(1982, 4, 9),
+            street="Hermann-Geib-Str.",
+            house_number="3",
+            postal_code="93047",
+            city="Regensburg",
+            church_tax_type=ChurchTaxType.ROEMISCH_KATHOLISCH,
         )
 
-        xml = build_est_xml(user, filing, [wtc])
+        xml = build_est_xml(user, _make_filing(), [], hersteller_id="12345")
 
-        assert "<Elster" in xml
-        assert "12345678901" in xml  # Steuer-ID
-        assert "Muster" in xml
-        assert "45000.00" in xml  # gross wage, cents -> euro string
-        assert "8708.00" in xml  # income tax
+        assert "<E0100081>12345678901</E0100081>" in xml  # Identifikationsnummer
+        assert "<E0100401>09.04.1982</E0100401>" in xml  # Geburtsdatum
+        assert "<E0100201>Mustermann</E0100201>" in xml  # Name
+        assert "<E0100301>Horst</E0100301>" in xml  # Vorname
+        assert "<E0100402>03</E0100402>" in xml  # Religion -- Römisch-katholisch
+        assert "<E0101104>Hermann-Geib-Str.</E0101104>" in xml  # Straße
+        assert "<E0101206>3</E0101206>" in xml  # Hausnummer
+        assert "<E0100601>93047</E0100601>" in xml  # PLZ
+        assert "<E0100602>Regensburg</E0100602>" in xml  # Wohnort
 
-    def test_handles_no_wage_certificates(self):
-        xml = build_est_xml(_make_user(), _make_filing(), [])
-        assert "<Elster" in xml
+    def test_omits_optional_personal_fields_that_have_no_value(self):
+        user = _make_user(date_of_birth=None, street=None, house_number=None, postal_code=None, city=None)
 
-    def test_handles_missing_steuer_id_gracefully(self):
-        user = _make_user(tax_identification_number=None)
-        xml = build_est_xml(user, _make_filing(), [])
-        assert "<SteuerId />" in xml or "<SteuerId></SteuerId>" in xml
+        xml = build_est_xml(user, _make_filing(), [], hersteller_id="12345")
 
-    def test_includes_capital_income_statements_and_their_tax(self):
-        filing = _make_filing(
-            capital_gains_tax_cents=25_000,
-            capital_gains_soli_cents=1_375,
-            capital_gains_church_tax_cents=0,
+        for tag in ("E0100401", "E0101104", "E0101206", "E0100601", "E0100602"):
+            assert f"<{tag}>" not in xml
+
+    def test_church_tax_type_other_is_not_guessed_at(self):
+        # OTHER covers many distinct real Religionsschluessel codes -- must
+        # be omitted, never mapped to an arbitrary one of them.
+        user = _make_user(church_tax_type=ChurchTaxType.OTHER)
+
+        xml = build_est_xml(user, _make_filing(), [], hersteller_id="12345")
+
+        assert "<E0100402>" not in xml
+
+    def test_zusammenveranlagung_flag_and_spouse_block_when_joint(self):
+        spouse = _make_user(
+            first_name="Carolina",
+            last_name="Mustermann",
+            tax_identification_number="10987654321",
+            date_of_birth=date(1988, 7, 9),
+            church_tax_type=ChurchTaxType.EVANGELISCH,
         )
-        stmt = CapitalIncomeStatement(
-            institution_name="Trade Republic",
-            gross_income_cents=150_000,
-            kapitalertragsteuer_withheld_cents=0,
+        user = _make_user(is_joint_assessment=True)
+        user.spouse = spouse
+
+        xml = build_est_xml(user, _make_filing(), [], hersteller_id="12345")
+
+        assert "<Vlg_Art><E0101201>X</E0101201></Vlg_Art>" in xml  # Zusammenveranlagung
+        assert "<E0100082>10987654321</E0100082>" in xml  # spouse Identifikationsnummer
+        assert "<E0101001>09.07.1988</E0101001>" in xml  # spouse Geburtsdatum
+        assert "<E0100901>Mustermann</E0100901>" in xml  # spouse Name
+        assert "<E0100801>Carolina</E0100801>" in xml  # spouse Vorname
+        assert "<E0101002>02</E0101002>" in xml  # spouse Religion -- Evangelisch
+
+    def test_no_spouse_block_when_not_joint_assessment(self):
+        xml = build_est_xml(_make_user(is_joint_assessment=False), _make_filing(), [], hersteller_id="12345")
+        assert "Vlg_Art" not in xml
+        assert "<B>" not in xml
+
+    def test_no_n_block_when_no_wage_certificates(self):
+        xml = build_est_xml(_make_user(), _make_filing(), [], hersteller_id="12345")
+        assert "<N>" not in xml
+
+    def test_single_wage_certificate_maps_to_lstb_einz_and_sum(self):
+        user = _make_user(tax_class=TaxClass.III)
+        cert = WageTaxCertificate(
+            employer_name="Muster GmbH",
+            gross_wage_cents=67_554_76,
+            income_tax_withheld_cents=17_653_65,
+            solidarity_surcharge_cents=3_543_54,
+            church_tax_withheld_cents=775_43,
         )
 
-        xml = build_est_xml(_make_user(), filing, [], capital_income_statements=[stmt])
+        xml = build_est_xml(user, _make_filing(), [cert], hersteller_id="12345")
 
-        assert "Trade Republic" in xml
-        assert "1500.00" in xml  # gross capital income
-        assert "250.00" in xml  # capital_gains_tax_cents -> euro
-        assert "13.75" in xml  # capital_gains_soli_cents -> euro
+        assert "<Person>PersonA</Person>" in xml
+        # Einz: 2-decimal figures for this one certificate -- COMMA decimal
+        # separator, confirmed required by the real DezimalzahlXxx regex
+        # facets (a period is a schema violation, not a style choice).
+        assert "<E0200204>67554,76</E0200204>" in xml
+        assert "<E0200304>17653,65</E0200304>" in xml
+        assert "<E0200404>3543,54</E0200404>" in xml
+        assert "<E0200504>775,43</E0200504>" in xml
+        # Sum: Steuerklasse + whole-euro gross wage (E0200201), decimal for the rest.
+        assert "<E0200002>3</E0200002>" in xml
+        assert "<E0200201>67554</E0200201>" in xml
+        assert "<E0200301>17653,65</E0200301>" in xml
+        assert "<E0200401>3543,54</E0200401>" in xml
+        assert "<E0200501>775,43</E0200501>" in xml
 
-    def test_includes_rental_property_statement_with_a_negative_net_result(self):
-        # A loss-making property is a legitimate signed negative result
-        # (§2 Abs. 3 EStG) -- must not come out mangled by divmod on a
-        # negative cents value.
-        filing = _make_filing(net_rental_income_cents=-55_000)
-        stmt = RentalPropertyStatement(
-            property_address="Musterstraße 1, Berlin",
-            gross_rental_income_cents=100_000,
-            deductible_expenses_cents=155_000,
+    def test_multiple_wage_certificates_sum_aggregates_across_employers(self):
+        certs = [
+            WageTaxCertificate(
+                employer_name="Employer A",
+                gross_wage_cents=30_000_00,
+                income_tax_withheld_cents=5_000_00,
+                solidarity_surcharge_cents=200_00,
+                church_tax_withheld_cents=100_00,
+            ),
+            WageTaxCertificate(
+                employer_name="Employer B",
+                gross_wage_cents=15_000_50,
+                income_tax_withheld_cents=2_000_00,
+                solidarity_surcharge_cents=50_00,
+                church_tax_withheld_cents=0,
+            ),
+        ]
+
+        xml = build_est_xml(_make_user(), _make_filing(), certs, hersteller_id="12345")
+
+        assert xml.count("<LStB_1_5_Einz>") == 2
+        assert "<E0200201>45000</E0200201>" in xml  # 30000.00 + 15000.50, truncated to whole euros
+        assert "<E0200301>7000,00</E0200301>" in xml
+        assert "<E0200401>250,00</E0200401>" in xml
+        assert "<E0200501>100,00</E0200501>" in xml
+
+    def test_no_kap_v_s_blocks_when_no_statements(self):
+        xml = build_est_xml(_make_user(), _make_filing(), [], hersteller_id="12345")
+        assert "<KAP>" not in xml
+        assert "<V>" not in xml
+        assert "<S>" not in xml
+
+    def test_capital_income_aggregates_across_institutions(self):
+        stmts = [
+            CapitalIncomeStatement(
+                institution_name="Trade Republic",
+                gross_income_cents=150_000,
+                kapitalertragsteuer_withheld_cents=25_000,
+                solidarity_surcharge_withheld_cents=1_375,
+                church_tax_withheld_cents=0,
+            ),
+            CapitalIncomeStatement(
+                institution_name="DKB",
+                gross_income_cents=50_075,
+                kapitalertragsteuer_withheld_cents=5_000,
+                solidarity_surcharge_withheld_cents=275,
+                church_tax_withheld_cents=0,
+            ),
+        ]
+
+        xml = build_est_xml(
+            _make_user(church_tax_type=ChurchTaxType.NONE),
+            _make_filing(),
+            [],
+            capital_income_statements=stmts,
+            hersteller_id="12345",
         )
 
-        xml = build_est_xml(_make_user(), filing, [], rental_property_statements=[stmt])
+        # Institution names never appear -- the real schema has no
+        # per-institution breakdown here, only one combined total.
+        assert "Trade Republic" not in xml
+        assert "DKB" not in xml
+        assert "<Person>PersonA</Person>" in xml
+        assert "<E1900701>2000</E1900701>" in xml  # (150000+50075)/100 truncated to whole euros
+        assert "<E1904701>300,00</E1904701>" in xml  # Kapitalertragsteuer
+        assert "<E1904901>16,50</E1904901>" in xml  # Soli
+        assert "<E1904801>0,00</E1904801>" in xml  # Kirchensteuer zur KapESt
 
-        assert "Musterstraße 1, Berlin" in xml
-        assert "-550.00" in xml  # net rental loss, correctly signed
+    def test_kist_pfl_flag_only_when_church_tax_liable_and_nothing_withheld(self):
+        stmt_none_withheld = CapitalIncomeStatement(
+            institution_name="Bank", gross_income_cents=10_000, church_tax_withheld_cents=0
+        )
+        xml = build_est_xml(
+            _make_user(church_tax_type=ChurchTaxType.ROEMISCH_KATHOLISCH),
+            _make_filing(),
+            [],
+            capital_income_statements=[stmt_none_withheld],
+            hersteller_id="12345",
+        )
+        assert "<E1900601>1</E1900601>" in xml  # Ja1BaseCType -- "1", not "X"
 
-    def test_includes_self_employment_statement(self):
-        filing = _make_filing(net_self_employment_income_cents=200_000)
+        stmt_withheld = CapitalIncomeStatement(
+            institution_name="Bank", gross_income_cents=10_000, church_tax_withheld_cents=50
+        )
+        xml = build_est_xml(
+            _make_user(church_tax_type=ChurchTaxType.ROEMISCH_KATHOLISCH),
+            _make_filing(),
+            [],
+            capital_income_statements=[stmt_withheld],
+            hersteller_id="12345",
+        )
+        assert "E1900601" not in xml  # withheld already -- flag doesn't apply
+
+        xml = build_est_xml(
+            _make_user(church_tax_type=ChurchTaxType.NONE),
+            _make_filing(),
+            [],
+            capital_income_statements=[stmt_none_withheld],
+            hersteller_id="12345",
+        )
+        assert "E1900601" not in xml  # not church-tax liable at all
+
+    def test_rental_property_maps_address_income_and_expenses(self):
+        stmts = [
+            RentalPropertyStatement(
+                property_address="Musterstraße 1, Berlin",
+                gross_rental_income_cents=100_000,
+                deductible_expenses_cents=155_000,
+            ),
+            RentalPropertyStatement(
+                property_address="Beispielweg 5, Hamburg",
+                gross_rental_income_cents=200_000,
+                deductible_expenses_cents=50_000,
+            ),
+        ]
+
+        xml = build_est_xml(_make_user(), _make_filing(), [], rental_property_statements=stmts, hersteller_id="12345")
+
+        assert xml.count("<Laufende_Nummer_V>") == 2
+        assert "<Laufende_Nummer_V>1</Laufende_Nummer_V>" in xml
+        assert "<Laufende_Nummer_V>2</Laufende_Nummer_V>" in xml
+        assert "<E0700407>Musterstraße 1, Berlin</E0700407>" in xml
+        assert "<E0700407>Beispielweg 5, Hamburg</E0700407>" in xml
+        assert "<E0700206>1000</E0700206>" in xml  # first property's rent, whole euros
+        assert "<E0705607>1550</E0705607>" in xml  # first property's expenses, whole euros
+        assert "<E0700206>2000</E0700206>" in xml
+        assert "<E0705607>500</E0705607>" in xml
+
+    def test_self_employment_maps_business_name_and_net_profit(self):
         stmt = SelfEmploymentStatement(
-            business_name="Muster Freelancing",
-            gross_revenue_cents=500_000,
-            deductible_expenses_cents=300_000,
+            business_name="Muster Freelancing", gross_revenue_cents=500_000, deductible_expenses_cents=300_000
         )
 
-        xml = build_est_xml(_make_user(), filing, [], self_employment_statements=[stmt])
+        xml = build_est_xml(
+            _make_user(), _make_filing(), [], self_employment_statements=[stmt], hersteller_id="12345"
+        )
 
-        assert "Muster Freelancing" in xml
-        assert "2000.00" in xml  # net self-employment income
+        assert "<Person>PersonA</Person>" in xml
+        assert "<E0803101>Muster Freelancing</E0803101>" in xml
+        assert "<E0803202>2000</E0803202>" in xml  # net profit (5000-3000), whole euros
 
-    def test_includes_kinderfreibetrag_when_applied(self):
+    def test_self_employment_caps_at_two_freiber_t_entries(self):
+        stmts = [
+            SelfEmploymentStatement(
+                business_name=f"Business {i}", gross_revenue_cents=100_000, deductible_expenses_cents=0
+            )
+            for i in range(3)
+        ]
+
+        xml = build_est_xml(
+            _make_user(), _make_filing(), [], self_employment_statements=stmts, hersteller_id="12345"
+        )
+
+        assert xml.count("<Freiber_T>") == 2
+        assert "Business 2" not in xml
+
+    def test_no_calculated_tax_figures_are_serialized(self):
+        # The real E10 schema has no "computed tax" element at all -- ERiC/
+        # the Finanzamt compute the assessment from declared income.
         filing = _make_filing(
-            number_of_children=2,
-            kinderfreibetrag_applied=True,
-            kinderfreibetrag_total_cents=1_234_00,
+            taxable_income_cents=43_680_00, income_tax_cents=8_708_00, solidarity_surcharge_cents=100_00
         )
 
-        xml = build_est_xml(_make_user(), filing, [])
+        xml = build_est_xml(_make_user(), filing, [], hersteller_id="12345")
 
-        assert "<AnzahlKinder>2</AnzahlKinder>" in xml
-        assert "1234.00" in xml
+        assert "Berechnung" not in xml
+        assert "8708" not in xml
 
-    def test_includes_kindergeld_when_kinderfreibetrag_not_applied(self):
-        filing = _make_filing(
-            number_of_children=1,
-            kinderfreibetrag_applied=False,
-            kindergeld_received_cents=2_50000,
+    def test_finanzamt_bufa_nummer_included_when_supplied(self):
+        xml = build_est_xml(
+            _make_user(), _make_filing(), [], hersteller_id="12345", finanzamt_bufa_nummer="9181"
         )
+        assert '<Empfaenger id="F">9181</Empfaenger>' in xml
 
-        xml = build_est_xml(_make_user(), filing, [])
+    def test_finanzamt_bufa_nummer_omitted_when_not_supplied(self):
+        xml = build_est_xml(_make_user(), _make_filing(), [], hersteller_id="12345")
+        assert 'id="F"' not in xml
 
-        assert "<KindergeldErhalten>2500.00</KindergeldErhalten>" in xml
-
-    def test_omits_kinderfreibetrag_block_when_no_children(self):
-        xml = build_est_xml(_make_user(), _make_filing(), [])
-        assert "Kinderfreibetrag" not in xml
+    def test_ziel_bundesland_maps_from_residence_state(self):
+        xml = build_est_xml(
+            _make_user(residence_state=FederalState.BAYERN), _make_filing(), [], hersteller_id="12345"
+        )
+        assert '<Empfaenger id="L"><Ziel>BY</Ziel></Empfaenger>' in xml
 
 
 class TestCentsToEuroStr:
     def test_positive_cents(self):
-        assert _cents_to_euro_str(150_000) == "1500.00"
+        # Comma decimal separator -- confirmed required by the real
+        # DezimalzahlXxx regex facets, see xml_builder.py's docstring.
+        assert _cents_to_euro_str(150_000) == "1500,00"
 
     def test_negative_cents_keeps_correct_magnitude(self):
-        assert _cents_to_euro_str(-55_000) == "-550.00"
+        assert _cents_to_euro_str(-55_000) == "-550,00"
 
     def test_none_defaults_to_zero(self):
-        assert _cents_to_euro_str(None) == "0.00"
+        assert _cents_to_euro_str(None) == "0,00"
+
+
+class TestCentsToWholeEuroStr:
+    def test_truncates_cents_not_rounds(self):
+        assert _cents_to_whole_euro_str(1500_99) == "1500"
+
+    def test_negative_cents_keeps_correct_magnitude(self):
+        assert _cents_to_whole_euro_str(-550_99) == "-550"
+
+    def test_none_defaults_to_zero(self):
+        assert _cents_to_whole_euro_str(None) == "0"
 
 
 class TestStubEricClient:
     def test_validates_well_formed_elster_xml(self):
         client = StubEricClient()
-        xml = build_est_xml(_make_user(), _make_filing(), [])
+        xml = build_est_xml(_make_user(), _make_filing(), [], hersteller_id="12345")
         client.validate_xml(xml)  # must not raise
 
     def test_rejects_malformed_xml(self):
@@ -190,7 +417,7 @@ class TestStubEricClient:
 
     def test_submit_returns_accepted_with_stub_prefixed_ticket(self):
         client = StubEricClient()
-        xml = build_est_xml(_make_user(), _make_filing(), [])
+        xml = build_est_xml(_make_user(), _make_filing(), [], hersteller_id="12345")
 
         result = client.submit(xml)
 

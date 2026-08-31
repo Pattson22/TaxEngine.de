@@ -32,7 +32,7 @@ corrected here.) Sources: [Taxfix — costs at a glance](https://taxfix.de/en/co
 | Self-employment / freelance (Anlage S, EÜR) | — (Taxfix targets employees/simple cases) | ✅ (Gewerbesteuer NOT modeled — correct for freelancers, understates Gewerbebetrieb) |
 | Kinderfreibetrag vs. Kindergeld Günstigerprüfung | ✅ | ✅ (children as a plain count, not first-class entities — see `kinderfreibetrag.py`) |
 | Real payment integration | ✅ | ✅ (Stripe PaymentIntent + verified webhook) |
-| ELSTER submission | ✅ | 🔶 full orchestration + XML generation built and tested; blocked on an actual BZSt developer certificate (`NativeEricClient` is an explicit stub, not a fake success path) |
+| ELSTER submission | ✅ | 🔶 real `cffi` binding to the actual ERiC library, verified end-to-end (`EricCheckXML()` passes cleanly for wage/capital/rental/self-employment income); `xml_builder.py` maps most but not all real Anlagen (children still unmapped); not yet wired into the FastAPI app (`NativeEricClient` belongs in a separate worker, see `docs/ELSTER_ERIC_INTEGRATION.md`); still blocked on a registered `HerstellerID` and each filer's Finanzamt BuFa-Nummer |
 | Guided interview UX / mobile apps | ✅ | 🔶 a working Next.js web frontend exists (`frontend/`), click-tested through register → calculate → view-results in a real browser — no mobile apps, no guided-interview-style Q&A (it's a form-based flow), and Stripe Elements card entry itself is untested (no real test keys — see `frontend/README.md`) |
 | Document OCR (auto-read Lohnsteuerbescheinigung) | ✅ | ❌ |
 | Multi-language UI | ✅ (English for expats) | ❌ — English only, no i18n |

@@ -62,6 +62,15 @@ class Settings(BaseSettings):
     # for the app itself; a future eric-submitter worker reads it directly.
     eric_sdk_path: str | None = None
 
+    # BZSt-issued software-manufacturer id, required by the real
+    # TransferHeader schema (app/eric/xml_builder.py) -- this project
+    # hasn't completed that separate registration step yet (see
+    # docs/ELSTER_ERIC_INTEGRATION.md), so this placeholder exists only so
+    # the app can boot; any real EricCheckXML()/EricBearbeiteVorgang()
+    # call against it fails loudly with an invalid-Hersteller-ID error,
+    # never silently succeeds.
+    eric_hersteller_id: str = "00000_override_in_env_once_registered"
+
     environment: str = "development"
 
 
