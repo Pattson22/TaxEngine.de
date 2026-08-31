@@ -51,16 +51,21 @@ of a real field identifier, cross-checked against the schema's own
   `rental_income.py`'s own docstring already states this project doesn't
   compute an AfA schedule, and claiming one of the specific boxes would
   misrepresent an expense type this project never actually determined.
+- `Kind` (Anlage Kind): one `<Kind>` block per `app.models.child.Child`
+  row (a separate table from `filing.number_of_children` -- see that
+  model's own docstring for why the two are deliberately independent),
+  with the child's identity (`Ang_Kind/Allg`: Identifikationsnummer, Vor-
+  and, if different from the filer's, Nachname, Geburtsdatum) and
+  Kindschaftsverhältnis (`K_Verh/K_Verh_A`, and `K_Verh_B` too when filing
+  jointly, both under the SAME simplifying assumption as the rest of this
+  module: the child lived with the family, and that relationship existed,
+  for the full calendar year -- no partial-year modeling, matching
+  `kinderfreibetrag.py`'s own documented scope limitation).
 
 ## What's deliberately NOT mapped yet -- omitted, not guessed
-Children (`Kind` -- blocked on the same "children as a plain count, not
-first-class entities" limitation `kinderfreibetrag.py`'s own docstring
-already documents; the real schema needs each child's own name/DOB/
-Identifikationsnummer, which the data model doesn't store),
-donations/church tax paid (`SA`), and the KOMPRIMIERT cover-sheet block
-(`Vorsatz`) are all real, separate Anlagen this project hasn't researched
-real field codes for yet, or (Kind) can't populate from the current data
-model at all.
+Donations/church tax paid (`SA`) and the KOMPRIMIERT cover-sheet block
+(`Vorsatz`) are real, separate Anlagen this project hasn't researched real
+field codes for yet.
 
 There is also no "computed tax" element in the real E10 schema at all --
 ERiC/the Finanzamt compute the assessment FROM the declared income; a
@@ -94,7 +99,8 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 
 from app.models.capital_income_statement import CapitalIncomeStatement
-from app.models.enums import ChurchTaxType, FederalState, TaxClass
+from app.models.child import Child
+from app.models.enums import ChildRelationshipType, ChurchTaxType, FederalState, TaxClass
 from app.models.rental_property_statement import RentalPropertyStatement
 from app.models.self_employment_statement import SelfEmploymentStatement
 from app.models.tax_filing import TaxFiling
@@ -147,6 +153,20 @@ _TAX_CLASS_TO_STEUERKLASSE: dict[TaxClass, str] = {
     TaxClass.V: "5",
     TaxClass.VI: "6",
 }
+
+# Enum_Kind_K_Verh_K_Verh_A_E0500807_CType (and the identical _B_E0500808
+# variant) -- the real 3-value Art des Kindschaftsverhältnisses enum.
+_CHILD_RELATIONSHIP_TYPE_TO_KINDSCHAFTSVERHAELTNIS: dict[ChildRelationshipType, str] = {
+    ChildRelationshipType.BIOLOGICAL_OR_ADOPTED: "1",
+    ChildRelationshipType.FOSTER: "2",
+    ChildRelationshipType.GRANDCHILD_OR_STEP: "3",
+}
+
+# WS/Inl's E0500703 and K_Verh_A/B's E0500601/E0500805 are all
+# DatumBereichTTpMMbTTpMMBaseCType ("TT.MM-TT.MM", day.month only, no
+# year) date RANGES -- this module's full-calendar-year simplification
+# (see module docstring) always uses this same full-year range.
+_FULL_YEAR_RANGE = "01.01-31.12"
 
 
 def _cents_to_euro_str(cents: int | None) -> str:
@@ -204,6 +224,7 @@ def build_est_xml(
     capital_income_statements: list[CapitalIncomeStatement] | None = None,
     rental_property_statements: list[RentalPropertyStatement] | None = None,
     self_employment_statements: list[SelfEmploymentStatement] | None = None,
+    children: list[Child] | None = None,
     *,
     hersteller_id: str,
     finanzamt_bufa_nummer: str | None = None,
@@ -230,6 +251,11 @@ def build_est_xml(
         self_employment_statements: this filing's self_employment_statements
             rows (Anlage S) -- up to 2 (the real schema's own limit for
             this simplified path), see this module's docstring.
+        children: this user's `children` rows for `filing.tax_year`
+            (Anlage Kind) -- one `<Kind>` block each, up to 14 (the real
+            schema's own limit). Independent of `filing.number_of_children`,
+            which still drives the Günstigerprüfung calculation itself --
+            see `app.models.child.Child`'s docstring for why.
         hersteller_id: BZSt-issued manufacturer id (required by the real
             TransferHeader schema, no valid default -- see
             docs/ELSTER_ERIC_INTEGRATION.md for the registration status).
@@ -245,6 +271,7 @@ def build_est_xml(
     capital_income_statements = capital_income_statements or []
     rental_property_statements = rental_property_statements or []
     self_employment_statements = self_employment_statements or []
+    children = children or []
 
     root = ET.Element("Elster", xmlns=_ELSTER_NAMESPACE)
 
@@ -315,6 +342,41 @@ def build_est_xml(
         _sub(b, "E0100801", spouse.first_name)  # Vorname
         spouse_religionsschluessel = _CHURCH_TAX_TYPE_TO_RELIGIONSSCHLUESSEL.get(spouse.church_tax_type)
         _sub(b, "E0101002", spouse_religionsschluessel)  # Religion
+
+    # Kind's real maxOccurs is 14 -- one <Kind> block per child, not
+    # aggregated like N/KAP's per-source totals.
+    for child in children[:14]:
+        kind = ET.SubElement(e10, "Kind")
+
+        ang_kind = ET.SubElement(kind, "Ang_Kind")
+        allg_kind = ET.SubElement(ang_kind, "Allg")
+        _sub(allg_kind, "E0500406", child.tax_identification_number)  # Identifikationsnummer
+        _sub(allg_kind, "E0500107", child.first_name)  # Vorname
+        _sub(allg_kind, "E0500108", child.last_name)  # ggf. abweichender Familienname
+        _sub(allg_kind, "E0500701", _format_date(child.date_of_birth))  # Geburtsdatum
+        ws = ET.SubElement(ang_kind, "WS")
+        inl = ET.SubElement(ws, "Inl")
+        # Full calendar year -- see module docstring's simplification note.
+        ET.SubElement(inl, "E0500703").text = _FULL_YEAR_RANGE
+
+        # `or` guards against an unflushed Child whose column DEFAULT
+        # hasn't been applied yet (SQLAlchemy only applies a mapped_column
+        # default at flush/INSERT, not on a bare Python object) -- the same
+        # real crash risk already handled for the numeric `or 0` guards
+        # above, here for an enum instead of a number.
+        relationship_type = child.relationship_type or ChildRelationshipType.BIOLOGICAL_OR_ADOPTED
+        kindschaftsverhaeltnis = _CHILD_RELATIONSHIP_TYPE_TO_KINDSCHAFTSVERHAELTNIS[relationship_type]
+        k_verh = ET.SubElement(kind, "K_Verh")
+        k_verh_a = ET.SubElement(k_verh, "K_Verh_A")
+        ET.SubElement(k_verh_a, "E0500807").text = kindschaftsverhaeltnis
+        ET.SubElement(k_verh_a, "E0500601").text = _FULL_YEAR_RANGE
+        if spouse is not None:
+            # Simplifying assumption: a jointly-assessed child is treated
+            # as related to BOTH spouses the same way -- no modeling of a
+            # stepchild who's only related to one of them.
+            k_verh_b = ET.SubElement(k_verh, "K_Verh_B")
+            ET.SubElement(k_verh_b, "E0500808").text = kindschaftsverhaeltnis
+            ET.SubElement(k_verh_b, "E0500805").text = _FULL_YEAR_RANGE
 
     if self_employment_statements:
         s = ET.SubElement(e10, "S")

@@ -15,6 +15,7 @@ from app.models.enums import ChurchTaxType, FederalState, TaxClass, pg_enum
 
 if TYPE_CHECKING:
     from app.models.capital_income_statement import CapitalIncomeStatement
+    from app.models.child import Child
     from app.models.deduction import Deduction
     from app.models.rental_property_statement import RentalPropertyStatement
     from app.models.self_employment_statement import SelfEmploymentStatement
@@ -104,5 +105,6 @@ class User(Base):
     self_employment_statements: Mapped[list["SelfEmploymentStatement"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    children: Mapped[list["Child"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     deductions: Mapped[list["Deduction"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     tax_filings: Mapped[list["TaxFiling"]] = relationship(back_populates="user", cascade="all, delete-orphan")

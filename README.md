@@ -37,12 +37,13 @@ TaxEngine.de/
         ├── database.py               SQLAlchemy engine/session, get_db dependency
         ├── security.py               Password hashing (argon2id) + JWT tokens
         ├── models/                   SQLAlchemy ORM models, 1:1 with the schema
-        │   ├── enums.py               TaxClass / DeductionCategory / FilingStatus
+        │   ├── enums.py               TaxClass / DeductionCategory / FilingStatus / ChildRelationshipType
         │   ├── user.py
         │   ├── wage_tax_certificate.py
         │   ├── capital_income_statement.py
         │   ├── rental_property_statement.py
         │   ├── self_employment_statement.py
+        │   ├── child.py               First-class Kinderfreibetrag child entities (name/DOB/Steuer-ID)
         │   ├── deduction.py
         │   └── tax_filing.py
         ├── schemas/                  Pydantic request/response models
@@ -50,12 +51,13 @@ TaxEngine.de/
         │   ├── tax_calculation_service.py   Bridges DB rows <-> tax_engine
         │   └── payment_service.py           Stripe PaymentIntent + webhook verification
         ├── eric/                     ELSTER/ERiC submission scaffold (see docs/ELSTER_ERIC_INTEGRATION.md)
-        │   ├── xml_builder.py         Domain model -> XML (real, tested)
-        │   ├── client.py              EricClient abstraction: StubEricClient (real) + NativeEricClient (stub)
+        │   ├── xml_builder.py         Domain model -> real E10 schema XML, verified against real ERiC
+        │   ├── native_bindings.py     cffi bindings to the real ericapi.dll/.so
+        │   ├── client.py              EricClient abstraction: StubEricClient + NativeEricClient (both real)
         │   └── submission_service.py  Validate -> submit -> persist orchestration
         ├── api/routes/               auth, users, wage-tax-certificates,
         │                             capital-income-statements, rental-property-statements,
-        │                             self-employment-statements, deductions,
+        │                             self-employment-statements, children, deductions,
         │                             tax-filings, webhooks
         └── tax_engine/               Framework-free calculation core
             ├── constants.py          Year-versioned legal constants (single
@@ -135,6 +137,7 @@ is handled explicitly in the migration file itself.
 | `POST/GET /capital-income-statements`, `GET/DELETE .../{id}` | Kapitalerträge (Anlage KAP) |
 | `POST/GET /rental-property-statements`, `GET/DELETE .../{id}` | Vermietung und Verpachtung (Anlage V) |
 | `POST/GET /self-employment-statements`, `GET/DELETE .../{id}` | Simplified EÜR (Anlage S) |
+| `POST/GET /children`, `GET/DELETE .../{id}` | First-class Kinderfreibetrag child records (Anlage Kind identity data) |
 | `POST/GET /deductions`, `GET/DELETE .../{id}` | Werbungskosten/Sonderausgaben/credit line items |
 | `POST/GET /tax-filings`, `GET/PATCH .../{id}` | Per-year filing record; PATCH sets Günstigerprüfung inputs |
 | `POST /tax-filings/{id}/calculate` | Runs the full `tax_engine` pipeline, persists the refund breakdown |
@@ -223,11 +226,13 @@ Kirchensteuer + Kappung, Spendenvortrag carry-forward, the §35a
 Handwerkerleistungen credit, real Stripe payment integration, and a real
 `cffi` binding to the ERiC library — verified end-to-end against the
 actual proprietary DLL, including a real `EricCheckXML()` pass for a
-filing combining wage, capital, rental, and self-employment income — with
-`xml_builder.py`'s payload now mapped to the real E10 schema for every
-income type except children (Kinderfreibetrag, blocked on a data-model
-gap, not schema research); see `docs/ELSTER_ERIC_INTEGRATION.md` for
-exactly what's mapped, what's still open, and the two remaining gaps (a
+filing combining wage, capital, rental, self-employment, and children's
+income together — with `xml_builder.py`'s payload now mapped to the real
+E10 schema for every income type this project models (children are now
+first-class `app/models/child.py` entities, not a plain count, precisely
+so their real ELSTER identity data can be submitted); see
+`docs/ELSTER_ERIC_INTEGRATION.md` for exactly what's mapped, what's still
+open (donations/church-tax-paid), and the two remaining gaps (a
 registered `HerstellerID` and each filer's Finanzamt BuFa-Nummer) before a
 real submission is possible.
 
@@ -243,9 +248,12 @@ was click-tested in a real browser, not just built; see
 
 Not yet implemented: capital-gains Günstigerprüfung (§32d Abs. 6 EStG
 election to use the progressive tariff instead of Abgeltungsteuer),
-Kinderfreibetrag as first-class child entities (currently a plain count,
-see `kinderfreibetrag.py`'s docstring — also why Anlage Kind isn't in
-`xml_builder.py` yet), AfA depreciation schedules for rental income,
+partial-year Kinderfreibetrag eligibility and the non-custodial-parent
+half-transfer (the Günstigerprüfung *calculation* still treats children
+as a plain count — see `kinderfreibetrag.py`'s docstring; children ARE
+first-class `app/models/child.py` entities now, with a real `/children`
+CRUD API and a real Anlage Kind mapping in `xml_builder.py`, but there's
+no frontend form for them yet), AfA depreciation schedules for rental income,
 Gewerbesteuer for self-employment, a registered ELSTER `HerstellerID` and
 per-filer Finanzamt routing data (both needed before `NativeEricClient`
 can be pointed at a real submission — see `docs/ELSTER_ERIC_INTEGRATION.md`),

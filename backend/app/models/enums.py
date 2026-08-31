@@ -21,6 +21,7 @@ from sqlalchemy import Enum as PgEnum
 from app.tax_engine.enums import ChurchTaxType, FederalState
 
 __all__ = [
+    "ChildRelationshipType",
     "ChurchTaxType",
     "DeductionCategory",
     "FederalState",
@@ -102,3 +103,17 @@ class SubmissionMode(str, Enum):
 
     KOMPRIMIERT = "KOMPRIMIERT"
     AUTHENTIFIZIERT = "AUTHENTIFIZIERT"
+
+
+class ChildRelationshipType(str, Enum):
+    """Art des Kindschaftsverhältnisses -- the real 3-value enum ERiC's E10
+    schema uses for a child's relationship to a filer (E0500807/E0500808
+    in Kind/K_Verh, confirmed against Enum_Kind_K_Verh_K_Verh_A_E0500807_CType
+    in the ERiC SDK), not invented. Drives app/eric/xml_builder.py's Kind
+    block; the tax_engine Günstigerprüfung itself (kinderfreibetrag.py)
+    doesn't need it -- eligibility isn't split by relationship type there.
+    """
+
+    BIOLOGICAL_OR_ADOPTED = "BIOLOGICAL_OR_ADOPTED"  # leibliches Kind / Adoptivkind
+    FOSTER = "FOSTER"  # Pflegekind
+    GRANDCHILD_OR_STEP = "GRANDCHILD_OR_STEP"  # Enkelkind / Stiefkind

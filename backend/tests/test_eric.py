@@ -25,7 +25,8 @@ from app.eric.client import (
 from app.eric.submission_service import SubmissionError, submit_filing
 from app.eric.xml_builder import _cents_to_euro_str, _cents_to_whole_euro_str, build_est_xml
 from app.models.capital_income_statement import CapitalIncomeStatement
-from app.models.enums import ChurchTaxType, FederalState, FilingStatus, TaxClass
+from app.models.child import Child
+from app.models.enums import ChildRelationshipType, ChurchTaxType, FederalState, FilingStatus, TaxClass
 from app.models.rental_property_statement import RentalPropertyStatement
 from app.models.self_employment_statement import SelfEmploymentStatement
 from app.models.tax_filing import TaxFiling
@@ -216,11 +217,69 @@ class TestXmlBuilder:
         assert "<E0200401>250,00</E0200401>" in xml
         assert "<E0200501>100,00</E0200501>" in xml
 
-    def test_no_kap_v_s_blocks_when_no_statements(self):
+    def test_no_kap_v_s_kind_blocks_when_none_supplied(self):
         xml = build_est_xml(_make_user(), _make_filing(), [], hersteller_id="12345")
         assert "<KAP>" not in xml
         assert "<V>" not in xml
         assert "<S>" not in xml
+        assert "<Kind>" not in xml
+
+    def test_child_maps_identity_and_kindschaftsverhaeltnis(self):
+        child = Child(
+            first_name="Tobias",
+            last_name=None,
+            date_of_birth=date(2014, 8, 20),
+            tax_identification_number="07792563183",
+            relationship_type=ChildRelationshipType.BIOLOGICAL_OR_ADOPTED,
+        )
+
+        xml = build_est_xml(
+            _make_user(is_joint_assessment=False), _make_filing(), [], children=[child], hersteller_id="12345"
+        )
+
+        assert "<E0500406>07792563183</E0500406>" in xml  # Identifikationsnummer
+        assert "<E0500107>Tobias</E0500107>" in xml  # Vorname
+        assert "E0500108" not in xml  # no abweichender Familienname supplied
+        assert "<E0500701>20.08.2014</E0500701>" in xml  # Geburtsdatum
+        assert "<E0500703>01.01-31.12</E0500703>" in xml  # full-year residency
+        assert "<E0500807>1</E0500807>" in xml  # Kindschaftsverhältnis -- biological/adopted
+        assert "<E0500601>01.01-31.12</E0500601>" in xml
+        assert "K_Verh_B" not in xml  # not joint assessment -- only Person A's relationship
+
+    def test_child_maps_abweichender_familienname_when_different(self):
+        child = Child(
+            first_name="Tobias", last_name="Anderername", date_of_birth=date(2014, 8, 20),
+            relationship_type=ChildRelationshipType.FOSTER,
+        )
+
+        xml = build_est_xml(_make_user(), _make_filing(), [], children=[child], hersteller_id="12345")
+
+        assert "<E0500108>Anderername</E0500108>" in xml
+        assert "<E0500807>2</E0500807>" in xml  # Pflegekind
+
+    def test_child_emits_k_verh_b_for_both_spouses_when_joint(self):
+        spouse = _make_user(first_name="Carolina", last_name="Mustermann")
+        user = _make_user(is_joint_assessment=True)
+        user.spouse = spouse
+        child = Child(
+            first_name="Regina", date_of_birth=date(2018, 5, 6),
+            relationship_type=ChildRelationshipType.GRANDCHILD_OR_STEP,
+        )
+
+        xml = build_est_xml(user, _make_filing(), [], children=[child], hersteller_id="12345")
+
+        assert "<E0500807>3</E0500807>" in xml  # K_Verh_A -- Enkelkind/Stiefkind
+        assert "<E0500808>3</E0500808>" in xml  # K_Verh_B -- same relationship, both spouses
+        assert "<E0500805>01.01-31.12</E0500805>" in xml
+
+    def test_up_to_14_children_mapped_no_more(self):
+        kids = [Child(first_name=f"Kid{i}", date_of_birth=date(2010, 1, 1)) for i in range(16)]
+
+        xml = build_est_xml(_make_user(), _make_filing(), [], children=kids, hersteller_id="12345")
+
+        assert xml.count("<Kind>") == 14
+        assert "Kid14" not in xml
+        assert "Kid15" not in xml
 
     def test_capital_income_aggregates_across_institutions(self):
         stmts = [

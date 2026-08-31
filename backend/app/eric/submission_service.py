@@ -18,6 +18,7 @@ from app.config import settings
 from app.eric.client import EricClient, EricSubmissionError, EricValidationError, StubEricClient
 from app.eric.xml_builder import build_est_xml
 from app.models.capital_income_statement import CapitalIncomeStatement
+from app.models.child import Child
 from app.models.enums import FilingStatus
 from app.models.rental_property_statement import RentalPropertyStatement
 from app.models.self_employment_statement import SelfEmploymentStatement
@@ -47,8 +48,10 @@ def submit_filing(
             feature).
         eric_client: defaults to StubEricClient() if not provided -- see
             that class's docstring for why it must never be relied on in
-            production (NativeEricClient is the real implementation,
-            currently unbuilt pending BZSt developer access).
+            production. NativeEricClient is real and verified against the
+            actual ERiC library (see docs/ELSTER_ERIC_INTEGRATION.md) but
+            isn't wired in as this default -- ERiC must never load inside
+            the FastAPI web process.
 
     Returns:
         The filing, with status advanced to SUBMITTED then ACCEPTED/
@@ -99,6 +102,11 @@ def submit_filing(
         )
         .all()
     )
+    children = (
+        db.query(Child)
+        .filter(Child.user_id == user.id, Child.tax_year == filing.tax_year)
+        .all()
+    )
     xml = build_est_xml(
         user,
         filing,
@@ -106,6 +114,7 @@ def submit_filing(
         capital_income_statements,
         rental_property_statements,
         self_employment_statements,
+        children,
         hersteller_id=settings.eric_hersteller_id,
     )
 

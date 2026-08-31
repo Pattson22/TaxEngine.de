@@ -10,6 +10,7 @@ Import every model here so `Base.metadata` is fully populated as soon as
 
 from app.database import Base
 from app.models.capital_income_statement import CapitalIncomeStatement
+from app.models.child import Child
 from app.models.deduction import Deduction
 from app.models.rental_property_statement import RentalPropertyStatement
 from app.models.self_employment_statement import SelfEmploymentStatement
@@ -20,6 +21,7 @@ from app.models.wage_tax_certificate import WageTaxCertificate
 __all__ = [
     "Base",
     "CapitalIncomeStatement",
+    "Child",
     "Deduction",
     "RentalPropertyStatement",
     "SelfEmploymentStatement",

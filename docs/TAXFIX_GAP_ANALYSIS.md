@@ -30,9 +30,9 @@ corrected here.) Sources: [Taxfix — costs at a glance](https://taxfix.de/en/co
 | Capital gains (Anlage KAP, Abgeltungsteuer + Sparer-Pauschbetrag) | ✅ | ✅ (Günstigerprüfung election to use the progressive tariff instead is NOT modeled) |
 | Rental income (Anlage V) | ✅ | ✅ (AfA depreciation schedule NOT modeled — expected pre-computed) |
 | Self-employment / freelance (Anlage S, EÜR) | — (Taxfix targets employees/simple cases) | ✅ (Gewerbesteuer NOT modeled — correct for freelancers, understates Gewerbebetrieb) |
-| Kinderfreibetrag vs. Kindergeld Günstigerprüfung | ✅ | ✅ (children as a plain count, not first-class entities — see `kinderfreibetrag.py`) |
+| Kinderfreibetrag vs. Kindergeld Günstigerprüfung | ✅ | ✅ (the calculation itself still treats children as a plain count — see `kinderfreibetrag.py`; children ARE first-class `app/models/child.py` entities for ELSTER submission identity data) |
 | Real payment integration | ✅ | ✅ (Stripe PaymentIntent + verified webhook) |
-| ELSTER submission | ✅ | 🔶 real `cffi` binding to the actual ERiC library, verified end-to-end (`EricCheckXML()` passes cleanly for wage/capital/rental/self-employment income); `xml_builder.py` maps most but not all real Anlagen (children still unmapped); not yet wired into the FastAPI app (`NativeEricClient` belongs in a separate worker, see `docs/ELSTER_ERIC_INTEGRATION.md`); still blocked on a registered `HerstellerID` and each filer's Finanzamt BuFa-Nummer |
+| ELSTER submission | ✅ | 🔶 real `cffi` binding to the actual ERiC library, verified end-to-end (`EricCheckXML()` passes cleanly for wage/capital/rental/self-employment/children income together); `xml_builder.py` maps every real Anlage this project supports (donations/church-tax-paid still open); not yet wired into the FastAPI app (`NativeEricClient` belongs in a separate worker, see `docs/ELSTER_ERIC_INTEGRATION.md`); still blocked on a registered `HerstellerID` and each filer's Finanzamt BuFa-Nummer |
 | Guided interview UX / mobile apps | ✅ | 🔶 a working Next.js web frontend exists (`frontend/`), click-tested through register → calculate → view-results in a real browser — no mobile apps, no guided-interview-style Q&A (it's a form-based flow), and Stripe Elements card entry itself is untested (no real test keys — see `frontend/README.md`) |
 | Document OCR (auto-read Lohnsteuerbescheinigung) | ✅ | ❌ |
 | Multi-language UI | ✅ (English for expats) | ❌ — English only, no i18n |
@@ -128,13 +128,19 @@ notes. A few highlights:
    official BMF publication — deliberately not guessed at here, since
    `constants.py`'s own docstring treats it as "a compliance artifact, not
    just code."
-3. **A real `NativeEricClient`** — requires a signed BZSt developer
-   agreement, the actual ERiC SDK, and a registered Herstellernummer/
-   Softwarezertifikat. See `docs/ELSTER_ERIC_INTEGRATION.md` and
-   `app/eric/client.py`'s docstring for exactly what's needed.
+3. **Wiring `NativeEricClient` into a real submission** — the client itself
+   is real and verified against the actual ERiC library (`EricCheckXML()`
+   passes cleanly for wage/capital/rental/self-employment/children income
+   together), but still needs a registered `HerstellerID`, each filer's
+   Finanzamt BuFa-Nummer, and a separate `eric-submitter` worker process
+   (ERiC must never load inside the FastAPI web process). See
+   `docs/ELSTER_ERIC_INTEGRATION.md` for exactly what's left.
 4. **Smaller, explicitly-documented approximations** worth revisiting
    before this handles real filings: the §32d Abs. 6 EStG capital-gains
    Günstigerprüfung election, AfA depreciation schedules, Gewerbesteuer,
-   Kinderfreibetrag as first-class child entities (birthdates, custody
-   splits, the non-custodial-parent half-transfer), and the Kirchensteuer
-   Kappung rate table's per-state-not-per-denomination simplification.
+   partial-year Kinderfreibetrag eligibility and the non-custodial-parent
+   half-transfer (children ARE now first-class entities with real
+   identity data for submission purposes, see `app/models/child.py` —
+   what's still simplified is the Günstigerprüfung calculation itself,
+   per `kinderfreibetrag.py`'s docstring), and the Kirchensteuer Kappung
+   rate table's per-state-not-per-denomination simplification.

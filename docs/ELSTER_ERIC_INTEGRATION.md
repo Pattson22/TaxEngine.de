@@ -84,6 +84,25 @@ document combining wage income, capital income, two rental properties,
 self-employment, and (separately) joint assessment with a spouse and two
 rental properties all pass `EricCheckXML()` cleanly (`ERIC_OK`).
 
+**Fourth update**: the "children as a plain count" data-model gap flagged
+above is now closed for submission purposes. `app/models/child.py` adds a
+first-class `children` table (name, DOB, Steuer-ID, and the real 3-value
+Kindschaftsverhältnis enum verified against
+`Enum_Kind_K_Verh_K_Verh_A_E0500807_CType`), with a `/children` CRUD API
+mirroring every other income-source route. `xml_builder.py` now maps
+`Kind` (identity in `Ang_Kind/Allg`, relationship in `K_Verh`, both
+spouses' `K_Verh_A`/`K_Verh_B` when filing jointly) under the same
+full-calendar-year simplification the rest of this module already uses.
+Deliberately NOT changed: `kinderfreibetrag.py`'s Günstigerprüfung
+calculation still runs on `TaxFiling.number_of_children` (a plain count) —
+the two are independent by design, since redesigning the calculation's
+own input path was a bigger, riskier change than this data-model gap
+required; see `Child`'s own docstring. A document combining joint
+assessment, wage income, and two children (one biological with a
+Steuer-ID, one foster with a different surname) passes `EricCheckXML()`
+cleanly (`ERIC_OK`). Only donations/church-tax-paid (`SA`) and the
+KOMPRIMIERT cover-sheet block (`Vorsatz`) remain unmapped now.
+
 **Correction to an earlier version of this doc**: obtaining the ERiC
 library itself is a *free developer registration* at
 elster.de/eportal/infoseite/entwickler, reviewed by the Bayerisches
