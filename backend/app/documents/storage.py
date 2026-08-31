@@ -1,6 +1,6 @@
 """
 DocumentStorage -- the abstraction boundary between our code and the
-actual object-storage backend. `extraction_service.py` depends only on
+actual object-storage backend. `upload_service.py` depends only on
 this interface. Unlike `app/eric/client.py`'s StubEricClient/
 NativeEricClient split, there's only one implementation here: object
 storage needs just account credentials, not a government developer

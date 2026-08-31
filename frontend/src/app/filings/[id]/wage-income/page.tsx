@@ -2,9 +2,9 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { createWageTaxCertificate, extractWageTaxCertificate, getTaxFiling } from "@/lib/api";
+import { createWageTaxCertificate, getTaxFiling, uploadWageTaxCertificateDocument } from "@/lib/api";
 import { useRequireOnboarding } from "@/lib/use-require-auth";
-import { centsToEuroInputValue, eurosToCents } from "@/lib/money";
+import { eurosToCents } from "@/lib/money";
 import { Button, Card, ErrorBanner, Eyebrow, Input, Label, PageHeading } from "@/components/ui";
 
 const ACCEPTED_TYPES =
@@ -18,8 +18,8 @@ export default function AddWageIncomePage() {
 
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isReading, setIsReading] = useState(false);
-  const [warnings, setWarnings] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
   const [sourceDocumentUrl, setSourceDocumentUrl] = useState<string | null>(null);
 
   const [employerName, setEmployerName] = useState("");
@@ -32,24 +32,15 @@ export default function AddWageIncomePage() {
     const file = event.target.files?.[0];
     if (!file || !token) return;
     setError(null);
-    setWarnings([]);
-    setIsReading(true);
+    setIsUploading(true);
     try {
-      const extraction = await extractWageTaxCertificate(token, file);
-      if (extraction.employer_name) setEmployerName(extraction.employer_name);
-      if (extraction.gross_wage_cents !== null) setGrossWage(centsToEuroInputValue(extraction.gross_wage_cents));
-      if (extraction.income_tax_withheld_cents !== null)
-        setIncomeTaxWithheld(centsToEuroInputValue(extraction.income_tax_withheld_cents));
-      if (extraction.solidarity_surcharge_cents !== null)
-        setSolidaritySurcharge(centsToEuroInputValue(extraction.solidarity_surcharge_cents));
-      if (extraction.church_tax_withheld_cents !== null)
-        setChurchTaxWithheld(centsToEuroInputValue(extraction.church_tax_withheld_cents));
-      setWarnings(extraction.warnings);
-      setSourceDocumentUrl(extraction.source_document_url);
+      const result = await uploadWageTaxCertificateDocument(token, file);
+      setSourceDocumentUrl(result.source_document_url);
+      setAttachedFileName(file.name);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't read that document.");
+      setError(err instanceof Error ? err.message : "Couldn't upload that document.");
     } finally {
-      setIsReading(false);
+      setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
@@ -89,14 +80,18 @@ export default function AddWageIncomePage() {
       <label
         htmlFor="document-upload"
         className={`mb-6 flex cursor-pointer flex-col items-center gap-1.5 border border-dashed px-6 py-8 text-center transition-colors ${
-          isReading ? "border-brass/50 bg-brass-soft/10" : "border-ink/20 hover:border-brass/50"
+          isUploading ? "border-brass/50 bg-brass-soft/10" : "border-ink/20 hover:border-brass/50"
         }`}
       >
         <span className="font-display text-sm font-medium text-ink">
-          {isReading ? "Reading your document…" : "Upload your Lohnsteuerbescheinigung"}
+          {isUploading
+            ? "Uploading…"
+            : attachedFileName
+              ? `Attached: ${attachedFileName}`
+              : "Attach your Lohnsteuerbescheinigung"}
         </span>
         <span className="text-xs text-ink/45">
-          PDF, PNG, JPEG, or Word — we&apos;ll read it and fill in the fields below to check.
+          PDF, PNG, JPEG, or Word — kept for your own records and linked to this entry. Fill in the fields below yourself.
         </span>
         <input
           ref={fileInputRef}
@@ -104,21 +99,10 @@ export default function AddWageIncomePage() {
           type="file"
           accept={ACCEPTED_TYPES}
           onChange={handleFileSelected}
-          disabled={isReading}
+          disabled={isUploading}
           className="hidden"
         />
       </label>
-
-      {warnings.length > 0 && (
-        <div className="mb-5 border-l-2 border-brass bg-brass-soft/15 px-4 py-3 text-sm text-ink/70">
-          <p className="mb-1 font-medium text-ink">Couldn&apos;t read everything confidently:</p>
-          <ul className="list-inside list-disc space-y-0.5">
-            {warnings.map((warning, i) => (
-              <li key={i}>{warning}</li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       <Card>
         {error && <ErrorBanner message={error} />}

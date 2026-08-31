@@ -7,13 +7,13 @@ import type {
   CapitalIncomeStatement,
   Deduction,
   DeductionCategory,
+  DocumentUploadResult,
   PaymentIntentResponse,
   RentalPropertyStatement,
   SelfEmploymentStatement,
   TaxFiling,
   TokenResponse,
   User,
-  WageCertificateExtraction,
   WageTaxCertificate,
 } from "./types";
 
@@ -209,13 +209,13 @@ export function createWageTaxCertificate(
   });
 }
 
-export function extractWageTaxCertificate(
+export function uploadWageTaxCertificateDocument(
   token: string,
   file: File,
-): Promise<WageCertificateExtraction> {
+): Promise<DocumentUploadResult> {
   const formData = new FormData();
   formData.append("file", file);
-  return request<WageCertificateExtraction>("/wage-tax-certificates/extract", {
+  return request<DocumentUploadResult>("/wage-tax-certificates/documents", {
     method: "POST",
     token,
     body: formData,

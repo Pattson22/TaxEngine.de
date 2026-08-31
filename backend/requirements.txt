@@ -20,10 +20,9 @@ python-jose[cryptography]==3.3.0   # JWT session tokens
 # --- Payments ---
 stripe==10.10.0
 
-# --- Document upload / extraction ---
-boto3==1.35.36             # S3-compatible object storage client
-anthropic==1.2.0           # Claude document/vision understanding for extraction
-python-docx==1.1.2         # text extraction from .docx (Claude's document blocks accept PDF/images, not docx)
+# --- Document upload ---
+boto3==1.35.36             # S3-compatible object storage client -- documents are stored as reference
+                            # links only (never read/parsed), matching ELSTER's own RABE approach
 
 # --- PDF generation ---
 reportlab==4.2.5           # komprimierte Steuererklärung cover sheet (see app/eric/cover_sheet.py)

@@ -5,44 +5,43 @@ import uuid
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_document_extraction_client, get_document_storage
+from app.api.deps import get_current_user, get_document_storage
 from app.database import get_db
-from app.documents.extraction_client import DocumentExtractionClient, DocumentExtractionError
-from app.documents.extraction_service import extract_wage_certificate_from_upload
 from app.documents.storage import DocumentStorage
+from app.documents.upload_service import DocumentUploadError, upload_wage_certificate_document
 from app.models.user import User
 from app.models.wage_tax_certificate import WageTaxCertificate
-from app.schemas.document_extraction import WageCertificateExtractionResult
+from app.schemas.document_upload import DocumentUploadResult
 from app.schemas.wage_tax_certificate import WageTaxCertificateCreate, WageTaxCertificateRead
 
 router = APIRouter(prefix="/wage-tax-certificates", tags=["wage-tax-certificates"])
 
 
-@router.post("/extract", response_model=WageCertificateExtractionResult)
-async def extract_wage_tax_certificate(
+@router.post("/documents", response_model=DocumentUploadResult, status_code=status.HTTP_201_CREATED)
+async def upload_wage_tax_certificate_document(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     storage: DocumentStorage = Depends(get_document_storage),
-    extraction_client: DocumentExtractionClient = Depends(get_document_extraction_client),
-) -> WageCertificateExtractionResult:
-    """Reads an uploaded Lohnsteuerbescheinigung (PDF, PNG, JPEG, or .docx)
-    and returns the figures it found -- this ONLY prefills the add-employer
-    form for the filer to review and correct; it never creates a
-    WageTaxCertificate row itself. See app/documents/extraction_service.py."""
+) -> DocumentUploadResult:
+    """Stores an uploaded Lohnsteuerbescheinigung (PDF, PNG, JPEG, or
+    .docx) as a reference link for the filer's own records -- content is
+    NEVER read or parsed (see app/documents/upload_service.py's module
+    docstring for why, matching ELSTER's own RABE approach). The filer
+    still types every field into the add-employer form themselves; this
+    only returns the link to attach as `source_document_url`."""
     data = await file.read()
     try:
-        extraction, storage_key = extract_wage_certificate_from_upload(
+        storage_key = upload_wage_certificate_document(
             user_id=current_user.id,
             filename=file.filename or "upload",
             content_type=file.content_type or "application/octet-stream",
             data=data,
             storage=storage,
-            extraction_client=extraction_client,
         )
-    except DocumentExtractionError as exc:
+    except DocumentUploadError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
-    return WageCertificateExtractionResult(**extraction.model_dump(), source_document_url=storage_key)
+    return DocumentUploadResult(source_document_url=storage_key)
 
 
 def _get_owned_certificate_or_404(
