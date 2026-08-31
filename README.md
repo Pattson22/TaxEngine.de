@@ -238,9 +238,12 @@ data model supports (children are now first-class `app/models/child.py`
 entities, not a plain count; church tax paid directly is a new
 `DeductionCategory`; each filer's Finanzamt is now collected via
 `User.finanzamt_bufa_nummer` and wired through automatically); see
-`docs/ELSTER_ERIC_INTEGRATION.md` for exactly what's mapped and the one
-remaining blocker (a registered `HerstellerID`) before a real submission
-is possible.
+`docs/ELSTER_ERIC_INTEGRATION.md` for exactly what's mapped; a real (if
+not production-hardened) `eric-submitter` worker process now exists
+(`app/eric_submitter/worker.py`) too, though not wired into any route
+yet. The Manufacturer ID (`HerstellerID`) application has been submitted
+via the real ELSTER portal and is pending Bayerisches Landesamt für
+Steuern approval — the last step before a real submission is possible.
 
 Frontend (`frontend/`) covers the golden path — register, dashboard, add
 wage income, add a deduction, calculate, view the refund breakdown, pay via

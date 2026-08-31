@@ -176,9 +176,23 @@ is additive queue infrastructure only; no route calls it yet, and
 (what the frontend's submit button already depends on) is completely
 unchanged.
 
+**Eighth update**: the Manufacturer ID (`HerstellerID`) application has
+been submitted via the real ELSTER Developer Area form
+(`elsterweb/entwickler/antrag-hersteller-id`) -- product "TaxEngine.de",
+interface ERiC, no prior manufacturer ID -- confirmed with a real
+ÜbermittlungsId (`b064de96-e903-439b-a82d-b7d6f92fddbb`) on 2026-08-31.
+Now pending Bayerisches Landesamt für Steuern review/approval; once the
+real 5-digit ID arrives, it replaces `settings.eric_hersteller_id`'s
+placeholder (`app/config.py`) and the `HerstellerID` this project sends
+in every `TransferHeader` stops being a placeholder value ERiC would
+reject.
+
 What's left before a real submission is possible is no longer schema
-research or worker architecture: the one remaining blocker is a
-registered `HerstellerID`.
+research, worker architecture, or an unstarted registration: it's waiting
+on that approval, then wiring `NativeEricClient` into a hardened version
+of `app/eric_submitter/worker.py` and giving each filer a way to enter
+their Finanzamt BuFa-Nummer (the field already exists on `User`, just no
+frontend form yet).
 
 **Correction to an earlier version of this doc**: obtaining the ERiC
 library itself is a *free developer registration* at
