@@ -143,6 +143,9 @@ export interface TaxFiling {
 
   donation_carryforward_out_cents: number | null;
 
+  altersvorsorge_deduction_cents: number | null;
+  sonstige_vorsorgeaufwendungen_deduction_cents: number | null;
+
   processing_fee_cents: number;
   fee_paid_at: string | null;
 

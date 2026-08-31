@@ -49,6 +49,9 @@ class TaxFilingRead(BaseModel):
 
     donation_carryforward_out_cents: int | None
 
+    altersvorsorge_deduction_cents: int | None
+    sonstige_vorsorgeaufwendungen_deduction_cents: int | None
+
     processing_fee_cents: int
     fee_paid_at: datetime | None
 

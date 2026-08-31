@@ -204,6 +204,10 @@ export function createWageTaxCertificate(
     income_tax_withheld_cents?: number;
     solidarity_surcharge_cents?: number;
     church_tax_withheld_cents?: number;
+    pension_insurance_employee_cents?: number;
+    health_insurance_employee_cents?: number;
+    long_term_care_insurance_employee_cents?: number;
+    unemployment_insurance_employee_cents?: number;
     source_document_url?: string;
   },
 ) {

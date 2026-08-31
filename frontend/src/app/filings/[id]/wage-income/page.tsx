@@ -27,6 +27,10 @@ export default function AddWageIncomePage() {
   const [incomeTaxWithheld, setIncomeTaxWithheld] = useState("");
   const [solidaritySurcharge, setSolidaritySurcharge] = useState("");
   const [churchTaxWithheld, setChurchTaxWithheld] = useState("");
+  const [pensionInsurance, setPensionInsurance] = useState("");
+  const [healthInsurance, setHealthInsurance] = useState("");
+  const [longTermCareInsurance, setLongTermCareInsurance] = useState("");
+  const [unemploymentInsurance, setUnemploymentInsurance] = useState("");
 
   async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -60,6 +64,10 @@ export default function AddWageIncomePage() {
         income_tax_withheld_cents: eurosToCents(incomeTaxWithheld || "0"),
         solidarity_surcharge_cents: eurosToCents(solidaritySurcharge || "0"),
         church_tax_withheld_cents: eurosToCents(churchTaxWithheld || "0"),
+        pension_insurance_employee_cents: eurosToCents(pensionInsurance || "0"),
+        health_insurance_employee_cents: eurosToCents(healthInsurance || "0"),
+        long_term_care_insurance_employee_cents: eurosToCents(longTermCareInsurance || "0"),
+        unemployment_insurance_employee_cents: eurosToCents(unemploymentInsurance || "0"),
         ...(sourceDocumentUrl ? { source_document_url: sourceDocumentUrl } : {}),
       });
       router.push(`/filings/${id}`);
@@ -166,6 +174,58 @@ export default function AddWageIncomePage() {
               onChange={(e) => setChurchTaxWithheld(e.target.value)}
             />
           </div>
+          <div>
+            <Label htmlFor="pension_insurance">Pension insurance (Rentenversicherung), €</Label>
+            <Input
+              id="pension_insurance"
+              name="pension_insurance"
+              type="number"
+              step="0.01"
+              min="0"
+              value={pensionInsurance}
+              onChange={(e) => setPensionInsurance(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="health_insurance">Health insurance (Krankenversicherung), €</Label>
+            <Input
+              id="health_insurance"
+              name="health_insurance"
+              type="number"
+              step="0.01"
+              min="0"
+              value={healthInsurance}
+              onChange={(e) => setHealthInsurance(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="long_term_care_insurance">Long-term care insurance (Pflegeversicherung), €</Label>
+            <Input
+              id="long_term_care_insurance"
+              name="long_term_care_insurance"
+              type="number"
+              step="0.01"
+              min="0"
+              value={longTermCareInsurance}
+              onChange={(e) => setLongTermCareInsurance(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="unemployment_insurance">Unemployment insurance (Arbeitslosenversicherung), €</Label>
+            <Input
+              id="unemployment_insurance"
+              name="unemployment_insurance"
+              type="number"
+              step="0.01"
+              min="0"
+              value={unemploymentInsurance}
+              onChange={(e) => setUnemploymentInsurance(e.target.value)}
+            />
+          </div>
+          <p className="text-xs text-ink/40">
+            These four are on your Lohnsteuerbescheinigung (usually Zeile 22–25) — they&apos;re
+            deductible as Vorsorgeaufwendungen on top of your income tax.
+          </p>
           <div className="flex gap-3 pt-2">
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Saving…" : "Save"}

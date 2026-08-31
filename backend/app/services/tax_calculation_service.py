@@ -41,6 +41,10 @@ from app.tax_engine.deductions.childcare import calculate_childcare_deduction
 from app.tax_engine.deductions.commute import calculate_entfernungspauschale
 from app.tax_engine.deductions.donations import calculate_spenden_deduction_with_carryforward
 from app.tax_engine.deductions.home_office import calculate_homeoffice_pauschale
+from app.tax_engine.deductions.vorsorgeaufwand import (
+    calculate_altersvorsorge_deduction,
+    calculate_sonstige_vorsorgeaufwendungen_deduction,
+)
 from app.tax_engine.kinderfreibetrag import apply_kinderfreibetrag_guenstigerpruefung
 from app.tax_engine.rental_income import calculate_rental_income
 from app.tax_engine.self_employment_income import calculate_self_employment_income
@@ -120,6 +124,33 @@ def calculate_tax_filing(db: Session, user: User, tax_year: int) -> TaxFiling:
     total_withheld_cents = sum(
         c.income_tax_withheld_cents + c.solidarity_surcharge_cents + c.church_tax_withheld_cents
         for c in wage_certs
+    )
+
+    # Vorsorgeaufwendungen (§10 Abs. 1 Nr. 2/3/3a EStG, see
+    # tax_engine/deductions/vorsorgeaufwand.py) -- computed from the same
+    # employee-side social-insurance contributions employers already report
+    # on the electronic Lohnsteuerbescheinigung, summed across every wage
+    # certificate for the year exactly like gross_income_cents above.
+    pension_insurance_employee_cents = sum(c.pension_insurance_employee_cents for c in wage_certs)
+    health_insurance_employee_cents = sum(c.health_insurance_employee_cents for c in wage_certs)
+    long_term_care_insurance_employee_cents = sum(
+        c.long_term_care_insurance_employee_cents for c in wage_certs
+    )
+    unemployment_insurance_employee_cents = sum(
+        c.unemployment_insurance_employee_cents for c in wage_certs
+    )
+    altersvorsorge_deduction_cents = calculate_altersvorsorge_deduction(
+        pension_insurance_employee_cents, user.is_joint_assessment, tax_year
+    )
+    sonstige_vorsorgeaufwendungen_deduction_cents = calculate_sonstige_vorsorgeaufwendungen_deduction(
+        health_insurance_employee_cents,
+        long_term_care_insurance_employee_cents,
+        unemployment_insurance_employee_cents,
+        user.is_joint_assessment,
+        tax_year,
+    )
+    vorsorgeaufwand_deduction_cents = (
+        altersvorsorge_deduction_cents + sonstige_vorsorgeaufwendungen_deduction_cents
     )
 
     capital_income_statements = (
@@ -233,7 +264,7 @@ def calculate_tax_filing(db: Session, user: User, tax_year: int) -> TaxFiling:
     taxable_income_cents = calculate_taxable_income(
         gross_income_cents,
         werbungskosten_applied_cents,
-        sonderausgaben_applied_cents,
+        sonderausgaben_applied_cents + vorsorgeaufwand_deduction_cents,
         other_income_categories_cents=net_other_income_categories_cents,
     )
     guenstigerpruefung = apply_kinderfreibetrag_guenstigerpruefung(
@@ -300,6 +331,8 @@ def calculate_tax_filing(db: Session, user: User, tax_year: int) -> TaxFiling:
     filing.net_rental_income_cents = net_rental_income_cents
     filing.net_self_employment_income_cents = net_self_employment_income_cents
     filing.donation_carryforward_out_cents = spendenvortrag.carryforward_out_cents
+    filing.altersvorsorge_deduction_cents = altersvorsorge_deduction_cents
+    filing.sonstige_vorsorgeaufwendungen_deduction_cents = sonstige_vorsorgeaufwendungen_deduction_cents
     filing.estimated_refund_cents = estimated_refund_cents
     filing.status = FilingStatus.CALCULATED
 

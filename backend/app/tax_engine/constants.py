@@ -77,6 +77,29 @@ class TaxYearConstants:
     sonderausgaben_pauschbetrag_single_cents: int
     sonderausgaben_pauschbetrag_joint_cents: int
 
+    # §10 Abs. 3 EStG — Altersvorsorgeaufwendungen (statutory/Rürup pension
+    # contributions): deductible fraction of the year (100% since 2023,
+    # originally phased in through 2025 but accelerated by the 2022 Gesetz
+    # zur Vermeidung der Doppelbesteuerung von Alterseinkünften), applied
+    # to contributions capped at this Höchstbetrag -- doubled for
+    # jointly-assessed couples (§10 Abs. 3 Satz 4 EStG). See
+    # tax_engine/deductions/vorsorgeaufwand.py for the full formula and its
+    # documented scope simplifications.
+    altersvorsorge_deductible_fraction: Decimal
+    altersvorsorge_hoechstbetrag_single_cents: int
+    altersvorsorge_hoechstbetrag_joint_cents: int
+
+    # §10 Abs. 4 EStG — sonstige Vorsorgeaufwendungen (health/long-term-care/
+    # unemployment insurance etc.). Basiskranken- und Pflegepflichtversicherung
+    # are always fully deductible with NO cap (Bürgerentlastungsgesetz
+    # Krankenversicherung 2010); this Höchstbetrag only bounds the OTHER
+    # sonstige Vorsorgeaufwendungen (e.g. unemployment insurance) on top of
+    # that floor -- unchanged since 2010, not indexed to wage growth like
+    # the Altersvorsorge Höchstbetrag above. Uses the employee rate (not
+    # the higher self-employed rate) -- see vorsorgeaufwand.py.
+    sonstige_vorsorgeaufwendungen_hoechstbetrag_single_cents: int
+    sonstige_vorsorgeaufwendungen_hoechstbetrag_joint_cents: int
+
     # §10b Abs. 1 EStG — Spenden (donations) are deductible as Sonderausgaben
     # up to this percentage of the Gesamtbetrag der Einkünfte (total income).
     spenden_deduction_cap_percentage: Decimal
@@ -160,6 +183,11 @@ TAX_YEAR_2024 = TaxYearConstants(
     church_tax_rate_other_states=Decimal("0.09"),
     sonderausgaben_pauschbetrag_single_cents=3_600,  # €36
     sonderausgaben_pauschbetrag_joint_cents=7_200,   # €72
+    altersvorsorge_deductible_fraction=Decimal("1.00"),   # 100%, fully phased in since 2023
+    altersvorsorge_hoechstbetrag_single_cents=27_565_00,  # €27,565
+    altersvorsorge_hoechstbetrag_joint_cents=55_130_00,   # €55,130 (exactly double)
+    sonstige_vorsorgeaufwendungen_hoechstbetrag_single_cents=190_000,  # €1,900 (employee rate)
+    sonstige_vorsorgeaufwendungen_hoechstbetrag_joint_cents=380_000,   # €3,800 (doubled)
     spenden_deduction_cap_percentage=Decimal("0.20"),
     childcare_deductible_fraction=Decimal("0.6667"),  # 2/3, per 2024 law (raised to 80% from 2025)
     childcare_max_deductible_cents_per_child=400_000,  # €4,000/child (2024)

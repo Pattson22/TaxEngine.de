@@ -32,7 +32,7 @@ corrected here.) Sources: [Taxfix — costs at a glance](https://taxfix.de/en/co
 | Self-employment / freelance (Anlage S, EÜR) | — (Taxfix targets employees/simple cases) | ✅ (Gewerbesteuer NOT modeled — correct for freelancers, understates Gewerbebetrieb) |
 | Kinderfreibetrag vs. Kindergeld Günstigerprüfung | ✅ | ✅ (the calculation itself still treats children as a plain count — see `kinderfreibetrag.py`; children ARE first-class `app/models/child.py` entities for ELSTER submission identity data) |
 | Real payment integration | ✅ | ✅ (Stripe PaymentIntent + verified webhook) |
-| ELSTER submission | ✅ | 🔶 real `cffi` binding to the actual ERiC library, verified end-to-end — `EricCheckXML()` passes cleanly for a document combining wages, capital/rental/self-employment/children income, donations, church tax paid, AND a real Vorsatz cover-sheet block (Steuernummer converted via the real `EricMakeElsterStnr()`); `xml_builder.py` now maps every real Anlage this project's data model supports; Finanzamt routing (`User.finanzamt_bufa_nummer`) is collected and wired through automatically; a real (if not production-hardened) `eric-submitter` worker process now exists (`app/eric_submitter/worker.py` + an `eric_submission_jobs` queue table) but isn't wired into any route yet — `submit_filing()`'s existing synchronous StubEricClient path is unchanged; the `HerstellerID` application has been submitted via the real ELSTER portal (ÜbermittlungsId `b064de96-e903-439b-a82d-b7d6f92fddbb`, 2026-08-31) and is pending Bayerisches Landesamt für Steuern approval — the last step before a real submission is possible |
+| ELSTER submission | ✅ | 🔶 real `cffi` binding to the actual ERiC library, verified end-to-end — `EricCheckXML()` passes cleanly for a document combining wages, capital/rental/self-employment/children income, donations, church tax paid, AND a real Vorsatz cover-sheet block (Steuernummer converted via the real `EricMakeElsterStnr()`); `xml_builder.py` now maps every real Anlage this project's data model supports; Finanzamt routing (`User.finanzamt_bufa_nummer`) is collected and wired through automatically; a real (if not production-hardened) `eric-submitter` worker process now exists (`app/eric_submitter/worker.py` + an `eric_submission_jobs` queue table) and `POST /tax-filings/{id}/submit` queues jobs onto it (`202 Accepted` + `GET /{id}/submission-job` polling) — `submit_filing()`/`StubEricClient` remain only as directly-tested helpers, no route calls them; the `HerstellerID` application has been submitted via the real ELSTER portal (ÜbermittlungsId `b064de96-e903-439b-a82d-b7d6f92fddbb`, 2026-08-31) and is pending Bayerisches Landesamt für Steuern approval — the last step before a real submission is possible |
 | Guided interview UX / mobile apps | ✅ | 🔶 a working Next.js web frontend exists (`frontend/`), click-tested through register → calculate → view-results in a real browser — no mobile apps, no guided-interview-style Q&A (it's a form-based flow), and Stripe Elements card entry itself is untested (no real test keys — see `frontend/README.md`) |
 | Document OCR (auto-read Lohnsteuerbescheinigung) | ✅ | ❌ |
 | Multi-language UI | ✅ (English for expats) | ❌ — English only, no i18n |
@@ -128,16 +128,16 @@ notes. A few highlights:
    official BMF publication — deliberately not guessed at here, since
    `constants.py`'s own docstring treats it as "a compliance artifact, not
    just code."
-3. **Wiring `NativeEricClient` into a real submission** — the client itself
-   is real and verified against the actual ERiC library (`EricCheckXML()`
-   passes cleanly for wage/capital/rental/self-employment/children income,
+3. **A live `NativeEricClient` submission** — the client itself is real and
+   verified against the actual ERiC library (`EricCheckXML()` passes
+   cleanly for wage/capital/rental/self-employment/children income,
    donations, church tax paid, and a real Vorsatz block, all together),
-   each filer's Finanzamt BuFa-Nummer is now collected, and a real (if not
-   production-hardened) `eric-submitter` worker process exists
-   (`app/eric_submitter/worker.py`) -- but it isn't wired into any route,
-   and the `HerstellerID` application is submitted and awaiting BZSt
-   approval, not yet in hand. See `docs/ELSTER_ERIC_INTEGRATION.md` for
-   exactly what's left.
+   each filer's Finanzamt BuFa-Nummer is collected, and `POST
+   /tax-filings/{id}/submit` now queues onto the real `eric-submitter`
+   worker (`app/eric_submitter/worker.py`) -- but the worker needs a real
+   `ERIC_SDK_PATH` to actually run, and the `HerstellerID` application is
+   still submitted and awaiting BZSt approval, not yet in hand. See
+   `docs/ELSTER_ERIC_INTEGRATION.md` for exactly what's left.
 4. **Smaller, explicitly-documented approximations** worth revisiting
    before this handles real filings: the §32d Abs. 6 EStG capital-gains
    Günstigerprüfung election, AfA depreciation schedules, Gewerbesteuer,

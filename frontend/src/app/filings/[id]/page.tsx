@@ -429,6 +429,22 @@ export default function FilingDetailPage() {
                         tone={filing.net_self_employment_income_cents >= 0 ? "default" : "negative"}
                       />
                     )}
+                  {filing.altersvorsorge_deduction_cents !== null &&
+                    filing.altersvorsorge_deduction_cents > 0 && (
+                      <LedgerLine
+                        label="Altersvorsorgeaufwendungen"
+                        value={formatCents(filing.altersvorsorge_deduction_cents)}
+                        tone="negative"
+                      />
+                    )}
+                  {filing.sonstige_vorsorgeaufwendungen_deduction_cents !== null &&
+                    filing.sonstige_vorsorgeaufwendungen_deduction_cents > 0 && (
+                      <LedgerLine
+                        label="Sonstige Vorsorgeaufwendungen"
+                        value={formatCents(filing.sonstige_vorsorgeaufwendungen_deduction_cents)}
+                        tone="negative"
+                      />
+                    )}
                   <LedgerLine label="Taxable income (zvE)" value={formatCents(filing.taxable_income_cents)} />
                   <LedgerLine label="Income tax" value={formatCents(filing.income_tax_cents)} />
                   <LedgerLine

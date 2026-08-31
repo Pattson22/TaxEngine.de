@@ -69,6 +69,15 @@ class TaxFiling(Base):
             "donation_carryforward_out_cents IS NULL OR donation_carryforward_out_cents >= 0",
             name="chk_filings_donation_carryforward_nonneg",
         ),
+        CheckConstraint(
+            "altersvorsorge_deduction_cents IS NULL OR altersvorsorge_deduction_cents >= 0",
+            name="chk_filings_altersvorsorge_nonneg",
+        ),
+        CheckConstraint(
+            "sonstige_vorsorgeaufwendungen_deduction_cents IS NULL "
+            "OR sonstige_vorsorgeaufwendungen_deduction_cents >= 0",
+            name="chk_filings_sonstige_vorsorge_nonneg",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -142,6 +151,17 @@ class TaxFiling(Base):
     # calculation time (see tax_calculation_service.py) rather than
     # duplicated storage that could drift out of sync.
     donation_carryforward_out_cents: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    # Vorsorgeaufwendungen (§10 Abs. 1 Nr. 2/3/3a EStG, see
+    # tax_engine/deductions/vorsorgeaufwand.py) -- kept as two separate line
+    # items, matching that module's two legally distinct sub-calculations,
+    # rather than folded into a single total or into sonderausgaben above
+    # (Vorsorgeaufwand has its own Höchstbetrag mechanism, never compared
+    # against the small §10c Sonderausgaben-Pauschbetrag).
+    altersvorsorge_deduction_cents: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    sonstige_vorsorgeaufwendungen_deduction_cents: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
 
     processing_fee_cents: Mapped[int] = mapped_column(
         BigInteger, nullable=False, default=3490, server_default=text("3490")
