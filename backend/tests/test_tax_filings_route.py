@@ -27,10 +27,13 @@ from app.api.routes.tax_filings import (
     calculate_filing,
     create_tax_filing,
     get_cover_sheet,
+    get_submission_job,
     list_supported_tax_years,
     mark_cover_sheet_mailed,
+    submit_tax_filing,
 )
-from app.models.enums import FilingStatus, SubmissionMode
+from app.models.enums import EricSubmissionJobStatus, FilingStatus, SubmissionMode
+from app.models.eric_submission_job import EricSubmissionJob
 from app.models.tax_filing import TaxFiling
 from app.models.user import User
 from app.schemas.tax_filing import TaxFilingCreate
@@ -195,3 +198,86 @@ class TestMarkCoverSheetMailed:
         assert result.cover_sheet_mailed_at is not None
         db.commit.assert_called_once()
         db.refresh.assert_called_once_with(filing)
+
+
+def _fee_paid_filing(**overrides) -> tuple[TaxFiling, User]:
+    user = User(id=uuid.uuid4(), tax_identification_number="12345678901")
+    defaults = dict(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        tax_year=2024,
+        status=FilingStatus.FEE_PAID,
+    )
+    defaults.update(overrides)
+    filing = TaxFiling(**defaults)
+    return filing, user
+
+
+class TestSubmitTaxFiling:
+    """submit_tax_filing only enqueues a job now -- see
+    app/eric/submission_service.py's module docstring for why the actual
+    ERiC call moved to the eric-submitter worker, out of this web process."""
+
+    def test_rejects_filing_not_fee_paid(self):
+        filing, user = _fee_paid_filing(status=FilingStatus.CALCULATED)
+        db = MagicMock()
+        db.get.return_value = filing
+
+        with pytest.raises(HTTPException) as exc_info:
+            submit_tax_filing(filing.id, current_user=user, db=db)
+
+        assert exc_info.value.status_code == 409
+        assert "FEE_PAID" in exc_info.value.detail
+
+    def test_rejects_missing_steuer_id(self):
+        filing, user = _fee_paid_filing()
+        user.tax_identification_number = None
+        db = MagicMock()
+        db.get.return_value = filing
+
+        with pytest.raises(HTTPException) as exc_info:
+            submit_tax_filing(filing.id, current_user=user, db=db)
+
+        assert exc_info.value.status_code == 409
+        assert "Steuer-ID" in exc_info.value.detail
+
+    def test_enqueues_a_job_for_a_valid_filing(self):
+        filing, user = _fee_paid_filing()
+        db = MagicMock()
+        db.get.return_value = filing
+
+        with patch("app.api.routes.tax_filings.enqueue_submission") as mocked_enqueue:
+            mocked_enqueue.return_value = EricSubmissionJob(
+                tax_filing_id=filing.id, status=EricSubmissionJobStatus.PENDING
+            )
+            result = submit_tax_filing(filing.id, current_user=user, db=db)
+
+        mocked_enqueue.assert_called_once_with(db, filing)
+        assert result.status == EricSubmissionJobStatus.PENDING
+        assert result.tax_filing_id == filing.id
+
+
+class TestGetSubmissionJob:
+    def test_404_when_nothing_queued_yet(self):
+        filing, user = _fee_paid_filing()
+        db = MagicMock()
+        db.get.return_value = filing
+        db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+
+        with pytest.raises(HTTPException) as exc_info:
+            get_submission_job(filing.id, current_user=user, db=db)
+
+        assert exc_info.value.status_code == 404
+
+    def test_returns_the_most_recent_job(self):
+        filing, user = _fee_paid_filing()
+        job = EricSubmissionJob(
+            tax_filing_id=filing.id, status=EricSubmissionJobStatus.SUCCEEDED, transfer_ticket="TICKET-1"
+        )
+        db = MagicMock()
+        db.get.return_value = filing
+        db.query.return_value.filter.return_value.order_by.return_value.first.return_value = job
+
+        result = get_submission_job(filing.id, current_user=user, db=db)
+
+        assert result is job

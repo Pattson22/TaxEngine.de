@@ -9,10 +9,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.database import get_db
 from app.eric.cover_sheet import build_cover_sheet_pdf
-from app.eric.submission_service import SubmissionError, submit_filing
+from app.eric.submission_service import enqueue_submission
 from app.models.enums import FilingStatus, SubmissionMode
+from app.models.eric_submission_job import EricSubmissionJob
 from app.models.tax_filing import TaxFiling
 from app.models.user import User
+from app.schemas.eric_submission_job import EricSubmissionJobRead
 from app.schemas.payment import PaymentIntentResponse
 from app.schemas.tax_filing import TaxFilingCreate, TaxFilingRead, TaxFilingUpdate
 from app.services.payment_service import PaymentError, create_payment_intent_for_filing
@@ -171,23 +173,28 @@ def create_filing_payment_intent(
     )
 
 
-@router.post("/{filing_id}/submit", response_model=TaxFilingRead)
+@router.post(
+    "/{filing_id}/submit", response_model=EricSubmissionJobRead, status_code=status.HTTP_202_ACCEPTED
+)
 def submit_tax_filing(
     filing_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> TaxFiling:
-    """Submit a FEE_PAID filing to ELSTER.
+) -> EricSubmissionJob:
+    """Queue a FEE_PAID filing for ELSTER submission.
 
-    *** Currently uses StubEricClient, not a real ERiC submission ***
-    See app/eric/client.py's NativeEricClient docstring: the real
-    transmission needs the actual ERiC library, obtained via a free BZSt
-    developer registration (see docs/ELSTER_ERIC_INTEGRATION.md) -- that
-    part is just unbuilt, not blocked. This endpoint exercises the real
-    orchestration (XML generation, status transitions, Transferticket
-    persistence) end-to-end against a stub that always "succeeds" -- it
-    must not be exposed as if it performs a real government submission
-    until NativeEricClient is implemented.
+    Submission itself happens out-of-process: this only inserts a PENDING
+    `EricSubmissionJob` row for the separate `eric-submitter` worker
+    (app/eric_submitter/worker.py) to claim and process against the real
+    NativeEricClient -- see docs/ELSTER_ERIC_INTEGRATION.md section 2 for
+    why ERiC must never load inside this web process. Poll
+    GET /{filing_id}/submission-job for the job's outcome; once it
+    SUCCEEDED, GET /{filing_id} reflects the filing's updated status and
+    elster_transfer_ticket.
+
+    The checks here (FEE_PAID, Steuer-ID present) exist purely to fail
+    fast with a useful error -- the worker re-verifies both itself before
+    actually submitting, since a queued job can sit for a while.
 
     Every filing submits in SubmissionMode.KOMPRIMIERT (the only mode
     implemented): once ACCEPTED, GET /{filing_id}/cover-sheet and
@@ -195,13 +202,43 @@ def submit_tax_filing(
     """
     filing = _get_owned_filing_or_404(filing_id, current_user, db)
 
-    try:
-        filing = submit_filing(db, current_user, filing)
-    except SubmissionError as exc:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if filing.status != FilingStatus.FEE_PAID:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Filing must be FEE_PAID before submission (current status: {filing.status.value}).",
+        )
+    if not current_user.tax_identification_number:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No tax_identification_number (Steuer-ID) on file -- required for ELSTER submission.",
+        )
 
-    return filing
+    return enqueue_submission(db, filing)
+
+
+@router.get("/{filing_id}/submission-job", response_model=EricSubmissionJobRead)
+def get_submission_job(
+    filing_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> EricSubmissionJob:
+    """The most recent submission attempt for this filing -- what the
+    frontend polls after POST /{filing_id}/submit to learn whether the
+    eric-submitter worker has picked the job up yet, and whether it
+    succeeded or failed."""
+    filing = _get_owned_filing_or_404(filing_id, current_user, db)
+
+    job = (
+        db.query(EricSubmissionJob)
+        .filter(EricSubmissionJob.tax_filing_id == filing.id)
+        .order_by(EricSubmissionJob.created_at.desc())
+        .first()
+    )
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No submission has been queued for this filing yet."
+        )
+    return job
 
 
 @router.get("/{filing_id}/cover-sheet")

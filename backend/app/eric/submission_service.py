@@ -7,13 +7,15 @@ calculation pipeline — this is the one place DB rows and the
 XML/ERiC-client layer meet, so `xml_builder.py` and `client.py` stay
 free of DB/session concerns.
 
-Two entry points, both real, deliberately NOT interchangeable yet:
-- `submit_filing()` -- synchronous, StubEricClient-backed by default, the
-  existing path the frontend's submit button already calls.
+Two entry points, both real, deliberately NOT interchangeable:
 - `enqueue_submission()` -- inserts an `EricSubmissionJob` row for the
-  future `eric-submitter` worker process (`app/eric_submitter/worker.py`)
-  to pick up and process with the real `NativeEricClient`. Additive queue
-  infrastructure only; not wired into any route yet.
+  `eric-submitter` worker process (`app/eric_submitter/worker.py`) to
+  claim and process with the real `NativeEricClient`. This is what
+  `POST /tax-filings/{id}/submit` calls -- see that route's docstring.
+- `submit_filing()` -- synchronous, StubEricClient-backed by default.
+  No route calls this; it stays as a directly-testable, dependency-
+  injectable entry point (see tests/test_eric.py) and as a template for
+  any future synchronous/ops-tooling use.
 
 `build_submission_xml()` is shared by both, so they can never silently
 diverge on what XML actually gets built for a given filing.
@@ -126,13 +128,13 @@ def build_submission_xml(
 
 
 def enqueue_submission(db: Session, filing: TaxFiling) -> EricSubmissionJob:
-    """Inserts a PENDING `eric_submission_jobs` row for the future
-    `eric-submitter` worker to pick up -- see that module's and
-    `EricSubmissionJob`'s docstrings for why this is separate, additive
-    queue infrastructure, NOT wired into `submit_filing`'s existing
-    synchronous (StubEricClient-backed) path. Does not validate `filing`'s
-    status -- the worker re-checks FEE_PAID/Steuer-ID itself, the same way
-    `submit_filing` does, right before it actually submits."""
+    """Inserts a PENDING `eric_submission_jobs` row for the `eric-submitter`
+    worker to claim -- see that module's and `EricSubmissionJob`'s
+    docstrings for why this runs in a separate process, never inside the
+    FastAPI app. Does not itself validate `filing`'s status -- the calling
+    route (`tax_filings.submit_tax_filing`) checks FEE_PAID/Steuer-ID for
+    fast feedback, and the worker re-checks both itself right before it
+    actually submits, since a queued job can sit for a while."""
     job = EricSubmissionJob(tax_filing_id=filing.id, status=EricSubmissionJobStatus.PENDING)
     db.add(job)
     db.commit()
@@ -157,9 +159,10 @@ def submit_filing(
         eric_client: defaults to StubEricClient() if not provided -- see
             that class's docstring for why it must never be relied on in
             production. NativeEricClient is real and verified against the
-            actual ERiC library (see docs/ELSTER_ERIC_INTEGRATION.md) but
-            isn't wired in as this default -- ERiC must never load inside
-            the FastAPI web process.
+            actual ERiC library (see docs/ELSTER_ERIC_INTEGRATION.md), but
+            no route calls submit_filing() at all -- ERiC must never load
+            inside the FastAPI web process, which rules out ever passing
+            a NativeEricClient here from a request handler.
 
     Returns:
         The filing, with status advanced to SUBMITTED then ACCEPTED/

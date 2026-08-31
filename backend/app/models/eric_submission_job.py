@@ -1,4 +1,4 @@
-"""SQLAlchemy model for `eric_submission_jobs` — the queue the future
+"""SQLAlchemy model for `eric_submission_jobs` — the queue the
 `eric-submitter` worker process polls (see app/eric_submitter/worker.py).
 
 Postgres-backed rather than Redis/SQS: no new infra dependency, and
@@ -8,12 +8,10 @@ acceptable choice ("e.g. a Postgres-backed job table or Redis/SQS").
 makes this safe for multiple worker instances to poll concurrently without
 double-processing a row.
 
-This table exists purely as real, additive queue infrastructure -- it is
-NOT wired into `submission_service.py`'s existing synchronous
-`submit_filing()` path, which stays unchanged (still the default,
-StubEricClient-backed behavior the frontend already depends on). Enqueuing
-a job here is a separate, not-yet-connected capability for a future async
-submission flow.
+A row here is created by `submission_service.enqueue_submission()`, which
+`POST /tax-filings/{id}/submit` calls -- see that route's docstring for
+the full async flow (enqueue -> worker claims/processes -> frontend polls
+GET /{id}/submission-job for the outcome).
 """
 
 from __future__ import annotations

@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   calculateTaxFiling,
   downloadCoverSheet,
+  getSubmissionJob,
   getTaxFiling,
   listCapitalIncomeStatements,
   listDeductions,
@@ -23,11 +24,14 @@ import { Ledger, LedgerLine } from "@/components/ledger";
 import type {
   CapitalIncomeStatement,
   Deduction,
+  EricSubmissionJob,
   RentalPropertyStatement,
   SelfEmploymentStatement,
   TaxFiling,
   WageTaxCertificate,
 } from "@/lib/types";
+
+const SUBMISSION_POLL_INTERVAL_MS = 3000;
 
 export default function FilingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -43,9 +47,23 @@ export default function FilingDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionJob, setSubmissionJob] = useState<EricSubmissionJob | null>(null);
   const [isDownloadingCoverSheet, setIsDownloadingCoverSheet] = useState(false);
   const [isMarkingMailed, setIsMarkingMailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    // Reset (not just declare) on every effect run: React's dev-mode
+    // StrictMode double-invokes effects (mount -> cleanup -> mount), so
+    // without resetting here, the simulated cleanup would leave this
+    // false forever after the remount, silently dropping every state
+    // update handleSubmit's polling loop makes afterward.
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const loadAll = useCallback(async () => {
     if (!token) return;
@@ -92,13 +110,32 @@ export default function FilingDetailPage() {
     if (!token) return;
     setIsSubmitting(true);
     setError(null);
+    setSubmissionJob(null);
     try {
-      const updated = await submitTaxFiling(token, id);
-      setFiling(updated);
+      // Submitting only queues an EricSubmissionJob -- the separate
+      // eric-submitter worker process claims and processes it against
+      // the real ERiC library (see backend/app/eric_submitter/worker.py).
+      // Poll until it reaches a terminal status, then refresh the filing.
+      let job = await submitTaxFiling(token, id);
+      if (isMountedRef.current) setSubmissionJob(job);
+
+      while (job.status === "PENDING" || job.status === "PROCESSING") {
+        await new Promise((resolve) => setTimeout(resolve, SUBMISSION_POLL_INTERVAL_MS));
+        if (!isMountedRef.current) return;
+        job = await getSubmissionJob(token, id);
+        if (isMountedRef.current) setSubmissionJob(job);
+      }
+
+      if (job.status === "SUCCEEDED") {
+        const updated = await getTaxFiling(token, id);
+        if (isMountedRef.current) setFiling(updated);
+      } else if (job.status === "FAILED" && isMountedRef.current) {
+        setError(job.error_message ?? "The eric-submitter worker couldn't submit this return.");
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't submit this return.");
+      if (isMountedRef.current) setError(err instanceof Error ? err.message : "Couldn't submit this return.");
     } finally {
-      setIsSubmitting(false);
+      if (isMountedRef.current) setIsSubmitting(false);
     }
   }
 
@@ -472,8 +509,11 @@ export default function FilingDetailPage() {
             ) : (
               <div className="mt-3">
                 <p className="text-sm text-ink/45">
-                  Fee paid — ready to submit. (Uses a test integration until the real ERiC
-                  library is wired in.)
+                  {submissionJob?.status === "PROCESSING"
+                    ? "The eric-submitter worker is processing this now…"
+                    : submissionJob?.status === "PENDING"
+                      ? "Queued — waiting for the eric-submitter worker to pick this up…"
+                      : "Fee paid — ready to submit."}
                 </p>
                 <Button className="mt-3" onClick={handleSubmit} disabled={isSubmitting}>
                   {isSubmitting ? "Submitting…" : "Submit to the Finanzamt"}

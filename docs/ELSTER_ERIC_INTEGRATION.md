@@ -167,14 +167,12 @@ for `Vorsatz` (non-fatal if it fails -- the block is just omitted), and
 `submit_filing()`'s synchronous path and the worker's async one can never
 silently diverge on what XML gets built for a given filing.
 
-**Deliberately NOT done**: the worker is explicitly a reference
-implementation, not a production deployment -- no supervisor/restart
-policy, no concurrency beyond one job at a time, no graceful-shutdown
-signal handling (see the module's own docstring). `enqueue_submission()`
-is additive queue infrastructure only; no route calls it yet, and
-`submit_filing()`'s existing StubEricClient-backed synchronous behavior
-(what the frontend's submit button already depends on) is completely
-unchanged.
+**Deliberately NOT done** (at the time of the Seventh update): the worker
+is explicitly a reference implementation, not a production deployment --
+no supervisor/restart policy, no concurrency beyond one job at a time, no
+graceful-shutdown signal handling (see the module's own docstring). That
+part is still true; the "not wired into any route yet" part below is not
+-- see the Ninth update.
 
 **Eighth update**: the Manufacturer ID (`HerstellerID`) application has
 been submitted via the real ELSTER Developer Area form
@@ -186,6 +184,30 @@ real 5-digit ID arrives, it replaces `settings.eric_hersteller_id`'s
 placeholder (`app/config.py`) and the `HerstellerID` this project sends
 in every `TransferHeader` stops being a placeholder value ERiC would
 reject.
+
+**Ninth update**: `POST /tax-filings/{id}/submit` now calls
+`enqueue_submission()`, not `submit_filing()` -- the async, worker-backed
+path from the Seventh update is wired in as the only submission path the
+API exposes. The route re-checks FEE_PAID/Steuer-ID itself (so a bad
+request fails immediately with a 409, rather than sitting in the queue
+until the worker's own re-check fails it) then returns the queued
+`EricSubmissionJob` (`202 Accepted`, `EricSubmissionJobRead`). A new
+`GET /{id}/submission-job` returns the most recent job for a filing; the
+frontend (`filings/[id]/page.tsx`) polls it every 3s after submitting
+until it reaches `SUCCEEDED`/`FAILED`, then refetches the filing to pick
+up the worker's status/`elster_transfer_ticket` update.
+`submit_filing()`/`StubEricClient` still exist and are still tested
+directly (`tests/test_eric.py`) -- no route calls either any more, but
+they remain a valid synchronous, dependency-injectable entry point (e.g.
+for a future ops/retry script).
+
+One consequence worth being explicit about: a submitted job now sits
+PENDING until an `eric-submitter` worker process is actually running
+(`python -m app.eric_submitter.worker`) to claim it -- unlike the old
+synchronous path, nothing about the web request itself fails if no
+worker is listening. In any environment where a filer might click
+"Submit to the Finanzamt", the worker process must be running alongside
+the API for their submission to ever leave PENDING.
 
 What's left before a real submission is possible is no longer schema
 research, worker architecture, or an unstarted registration: it's waiting

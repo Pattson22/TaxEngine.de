@@ -48,6 +48,19 @@ export type FilingStatus =
 
 export type SubmissionMode = "KOMPRIMIERT" | "AUTHENTIFIZIERT";
 
+export type EricSubmissionJobStatus = "PENDING" | "PROCESSING" | "SUCCEEDED" | "FAILED";
+
+export interface EricSubmissionJob {
+  id: string;
+  tax_filing_id: string;
+  status: EricSubmissionJobStatus;
+  error_message: string | null;
+  transfer_ticket: string | null;
+  claimed_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
 export interface User {
   id: string;
   email: string;

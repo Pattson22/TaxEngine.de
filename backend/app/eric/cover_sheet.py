@@ -9,9 +9,10 @@ by ERiC itself at transmission time, which only exists once a real
 NativeEricClient (see app/eric/client.py) actually calls EricBearbeiteVorgang.
 This is a functional stand-in: a human-readable summary the taxpayer signs
 and mails, referencing the same Transferticket their electronic submission
-already produced (from StubEricClient today, from ERiC once it's real) so
-the paper and the electronic record can be matched up manually. Treat it
-as an MVP substitute, not a drop-in replacement for the barcode form.
+already produced via the eric-submitter worker's NativeEricClient (see
+app/eric_submitter/worker.py) so the paper and the electronic record can
+be matched up manually. Treat it as an MVP substitute, not a drop-in
+replacement for the barcode form.
 """
 
 from __future__ import annotations

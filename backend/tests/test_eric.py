@@ -946,9 +946,9 @@ class TestSubmitFiling:
 
 
 class TestEnqueueSubmission:
-    """enqueue_submission is additive queue infrastructure for the future
-    eric-submitter worker -- NOT wired into any route, and deliberately
-    doesn't touch submit_filing's existing synchronous behavior at all."""
+    """enqueue_submission is what POST /tax-filings/{id}/submit calls (see
+    tests/test_tax_filings_route.py) -- it only inserts the job row itself,
+    deliberately without touching submit_filing's synchronous behavior."""
 
     def test_creates_pending_job_for_the_filing(self):
         db = MagicMock()

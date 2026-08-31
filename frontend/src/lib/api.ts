@@ -8,6 +8,7 @@ import type {
   Deduction,
   DeductionCategory,
   DocumentUploadResult,
+  EricSubmissionJob,
   PaymentIntentResponse,
   RentalPropertyStatement,
   SelfEmploymentStatement,
@@ -156,8 +157,12 @@ export function createPaymentIntent(
   });
 }
 
-export function submitTaxFiling(token: string, filingId: string): Promise<TaxFiling> {
-  return request<TaxFiling>(`/tax-filings/${filingId}/submit`, { method: "POST", token });
+export function submitTaxFiling(token: string, filingId: string): Promise<EricSubmissionJob> {
+  return request<EricSubmissionJob>(`/tax-filings/${filingId}/submit`, { method: "POST", token });
+}
+
+export function getSubmissionJob(token: string, filingId: string): Promise<EricSubmissionJob> {
+  return request<EricSubmissionJob>(`/tax-filings/${filingId}/submission-job`, { token });
 }
 
 // Binary PDF response -- can't go through request()'s JSON-only parsing.
