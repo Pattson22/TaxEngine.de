@@ -61,11 +61,35 @@ of a real field identifier, cross-checked against the schema's own
   module: the child lived with the family, and that relationship existed,
   for the full calendar year -- no partial-year modeling, matching
   `kinderfreibetrag.py`'s own documented scope limitation).
+- `SA` (Sonderausgaben), donations only: `Zuw/Sp_MB/Foerd_st_beg_Zw_Inl`
+  carries the combined total across every DONATIONS-category `deductions`
+  row for the year (`Sum_Best/E0108105`), aggregated with the exact same
+  rule as `tax_calculation_service._aggregate_donations_this_year` (the
+  20% cap applies to the SUM, not per-row -- see that function's own
+  docstring for the real bug this once caught). Always filed as
+  `Foerd_st_beg_Zw_Inl` (domestic recipients) -- the data model doesn't
+  collect a recipient organization or country, so foreign-recipient
+  donations (`Foerd_st_beg_Zw_EU_EWR`) can never be distinguished and are
+  never assumed.
 
 ## What's deliberately NOT mapped yet -- omitted, not guessed
-Donations/church tax paid (`SA`) and the KOMPRIMIERT cover-sheet block
-(`Vorsatz`) are real, separate Anlagen this project hasn't researched real
-field codes for yet.
+- `SA/KiSt` (church tax PAID, e.g. direct quarterly payments to the
+  Kirchensteueramt): its own field documentation is explicit that this
+  box excludes "soweit diese ... als Zuschlag zur Abgeltungsteuer
+  einbehalten oder gezahlt wurde" (church tax already withheld as a
+  capital-gains surcharge) -- i.e. it's legally a DIFFERENT figure from
+  the church tax `N`/`KAP` already declare as withheld, not a
+  restatement of it. This project doesn't collect "church tax paid
+  directly, outside withholding" anywhere, and deriving this box from
+  the withheld figures already declared elsewhere would misrepresent
+  what it means -- so it's left out rather than guessed at.
+- The KOMPRIMIERT cover-sheet block (`Vorsatz`) needs the filer's
+  Steuernummer in ERiC's own unified 13-digit format, which the real API
+  provides via `EricMakeElsterStnr()` -- not yet bound in
+  `native_bindings.py` (only the subset of the API this project's
+  KOMPRIMIERT-unauthenticated flow needs is declared there today) -- so
+  this Anlage is real, separate research/implementation work, not a
+  drive-by addition.
 
 There is also no "computed tax" element in the real E10 schema at all --
 ERiC/the Finanzamt compute the assessment FROM the declared income; a
@@ -100,12 +124,14 @@ import xml.etree.ElementTree as ET
 
 from app.models.capital_income_statement import CapitalIncomeStatement
 from app.models.child import Child
-from app.models.enums import ChildRelationshipType, ChurchTaxType, FederalState, TaxClass
+from app.models.deduction import Deduction
+from app.models.enums import ChildRelationshipType, ChurchTaxType, DeductionCategory, FederalState, TaxClass
 from app.models.rental_property_statement import RentalPropertyStatement
 from app.models.self_employment_statement import SelfEmploymentStatement
 from app.models.tax_filing import TaxFiling
 from app.models.user import User
 from app.models.wage_tax_certificate import WageTaxCertificate
+from app.schemas.deduction import DonationDetails
 
 _ELSTER_NAMESPACE = "http://www.elster.de/elsterxml/schema/v11"
 _HEADER_VERSION = "11"
@@ -225,6 +251,7 @@ def build_est_xml(
     rental_property_statements: list[RentalPropertyStatement] | None = None,
     self_employment_statements: list[SelfEmploymentStatement] | None = None,
     children: list[Child] | None = None,
+    deductions: list[Deduction] | None = None,
     *,
     hersteller_id: str,
     finanzamt_bufa_nummer: str | None = None,
@@ -256,6 +283,11 @@ def build_est_xml(
             schema's own limit). Independent of `filing.number_of_children`,
             which still drives the Günstigerprüfung calculation itself --
             see `app.models.child.Child`'s docstring for why.
+        deductions: this filing's deductions rows -- only DONATIONS-category
+            rows are used (Anlage SA's `Zuw/Sp_MB/Foerd_st_beg_Zw_Inl`,
+            aggregated exactly like `_aggregate_donations_this_year` in
+            `tax_calculation_service.py`); every other category is not yet
+            mapped, see this module's docstring.
         hersteller_id: BZSt-issued manufacturer id (required by the real
             TransferHeader schema, no valid default -- see
             docs/ELSTER_ERIC_INTEGRATION.md for the registration status).
@@ -272,6 +304,7 @@ def build_est_xml(
     rental_property_statements = rental_property_statements or []
     self_employment_statements = self_employment_statements or []
     children = children or []
+    deductions = deductions or []
 
     root = ET.Element("Elster", xmlns=_ELSTER_NAMESPACE)
 
@@ -342,6 +375,33 @@ def build_est_xml(
         _sub(b, "E0100801", spouse.first_name)  # Vorname
         spouse_religionsschluessel = _CHURCH_TAX_TYPE_TO_RELIGIONSSCHLUESSEL.get(spouse.church_tax_type)
         _sub(b, "E0101002", spouse_religionsschluessel)  # Religion
+
+    # Mirrors tax_calculation_service._aggregate_donations_this_year exactly
+    # (same DonationDetails schema, same "combined total across every
+    # DONATIONS row" rule -- the 20% cap applies to the sum, not per-row).
+    total_donations_cents = 0
+    for deduction in deductions:
+        if deduction.category != DeductionCategory.DONATIONS:
+            continue
+        total_donations_cents += DonationDetails.model_validate(deduction.details).amount_donated_cents
+
+    if total_donations_cents > 0:
+        sa = ET.SubElement(e10, "SA")
+        zuw = ET.SubElement(sa, "Zuw")
+        sp_mb = ET.SubElement(zuw, "Sp_MB")
+        # Foerd_st_beg_Zw_Inl = donations to DOMESTIC tax-privileged
+        # recipients -- the general-purpose donation box, and the only one
+        # this project's data model can support (no recipient
+        # country/organization is collected, so foreign-recipient
+        # donations -- Foerd_st_beg_Zw_EU_EWR -- can't be distinguished
+        # and are never assumed). SA/KiSt (church tax PAID directly, not
+        # withheld) is deliberately NOT mapped -- see this module's
+        # docstring.
+        foerd_inl = ET.SubElement(sp_mb, "Foerd_st_beg_Zw_Inl")
+        sum_best = ET.SubElement(foerd_inl, "Sum_Best")
+        ET.SubElement(sum_best, "E0108105").text = _cents_to_whole_euro_str(
+            total_donations_cents
+        )  # zur Förderung steuerbegünstigter Zwecke an Empfänger im Inland
 
     # Kind's real maxOccurs is 14 -- one <Kind> block per child, not
     # aggregated like N/KAP's per-source totals.

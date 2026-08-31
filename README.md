@@ -226,15 +226,16 @@ Kirchensteuer + Kappung, Spendenvortrag carry-forward, the §35a
 Handwerkerleistungen credit, real Stripe payment integration, and a real
 `cffi` binding to the ERiC library — verified end-to-end against the
 actual proprietary DLL, including a real `EricCheckXML()` pass for a
-filing combining wage, capital, rental, self-employment, and children's
-income together — with `xml_builder.py`'s payload now mapped to the real
-E10 schema for every income type this project models (children are now
-first-class `app/models/child.py` entities, not a plain count, precisely
-so their real ELSTER identity data can be submitted); see
-`docs/ELSTER_ERIC_INTEGRATION.md` for exactly what's mapped, what's still
-open (donations/church-tax-paid), and the two remaining gaps (a
-registered `HerstellerID` and each filer's Finanzamt BuFa-Nummer) before a
-real submission is possible.
+filing combining wage, capital, rental, self-employment, children's
+income, and donations all together — with `xml_builder.py`'s payload now
+mapped to the real E10 schema for every income type and deduction this
+project models (children are now first-class `app/models/child.py`
+entities, not a plain count, precisely so their real ELSTER identity data
+can be submitted); see `docs/ELSTER_ERIC_INTEGRATION.md` for exactly
+what's mapped, the two Anlagen still open for specific documented reasons
+(church tax paid directly, and the KOMPRIMIERT cover sheet), and the two
+remaining gaps (a registered `HerstellerID` and each filer's Finanzamt
+BuFa-Nummer) before a real submission is possible.
 
 Frontend (`frontend/`) covers the golden path — register, dashboard, add
 wage income, add a deduction, calculate, view the refund breakdown, pay via

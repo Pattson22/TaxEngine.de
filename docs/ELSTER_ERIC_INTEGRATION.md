@@ -103,6 +103,34 @@ Steuer-ID, one foster with a different surname) passes `EricCheckXML()`
 cleanly (`ERIC_OK`). Only donations/church-tax-paid (`SA`) and the
 KOMPRIMIERT cover-sheet block (`Vorsatz`) remain unmapped now.
 
+**Fifth update**: `xml_builder.py` now also maps donations
+(`SA/Zuw/Sp_MB/Foerd_st_beg_Zw_Inl`), aggregated across every
+DONATIONS-category `deductions` row with the exact same rule
+`tax_calculation_service._aggregate_donations_this_year` already uses (the
+20% cap applies to the combined total, not per-row -- the same real bug
+that function's own docstring documents). Always filed as domestic
+(`Foerd_st_beg_Zw_Inl`), never `Foerd_st_beg_Zw_EU_EWR` -- the data model
+doesn't collect a recipient organization or country, so foreign
+recipients can never be distinguished and are never assumed. A document
+combining every mapped Anlage at once (wages, capital income, a rental
+property, self-employment, a child, and donations) passes `EricCheckXML()`
+cleanly (`ERIC_OK`).
+
+Two Anlagen remain deliberately unmapped, each for a specific, real
+reason rather than "not gotten to yet":
+- `SA/KiSt` (church tax PAID, e.g. direct payments to the
+  Kirchensteueramt): its own field documentation explicitly EXCLUDES
+  church tax already withheld as an Abgeltungsteuer surcharge -- i.e. it's
+  a legally different figure from what `N`/`KAP` already declare as
+  withheld, not a restatement of it. This project doesn't collect "church
+  tax paid directly, outside withholding" anywhere, so deriving this box
+  from already-withheld figures would misrepresent what it means.
+- The KOMPRIMIERT cover-sheet block (`Vorsatz`) needs the filer's
+  Steuernummer in ERiC's own unified 13-digit format, produced by
+  `EricMakeElsterStnr()` -- not yet bound in `native_bindings.py` (which
+  only declares the subset of the API the KOMPRIMIERT-unauthenticated
+  flow needs today). Real, separate work, not a drive-by addition.
+
 **Correction to an earlier version of this doc**: obtaining the ERiC
 library itself is a *free developer registration* at
 elster.de/eportal/infoseite/entwickler, reviewed by the Bayerisches

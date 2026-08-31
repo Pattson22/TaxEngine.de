@@ -19,6 +19,7 @@ from app.eric.client import EricClient, EricSubmissionError, EricValidationError
 from app.eric.xml_builder import build_est_xml
 from app.models.capital_income_statement import CapitalIncomeStatement
 from app.models.child import Child
+from app.models.deduction import Deduction
 from app.models.enums import FilingStatus
 from app.models.rental_property_statement import RentalPropertyStatement
 from app.models.self_employment_statement import SelfEmploymentStatement
@@ -107,6 +108,11 @@ def submit_filing(
         .filter(Child.user_id == user.id, Child.tax_year == filing.tax_year)
         .all()
     )
+    deductions = (
+        db.query(Deduction)
+        .filter(Deduction.user_id == user.id, Deduction.tax_year == filing.tax_year)
+        .all()
+    )
     xml = build_est_xml(
         user,
         filing,
@@ -115,6 +121,7 @@ def submit_filing(
         rental_property_statements,
         self_employment_statements,
         children,
+        deductions,
         hersteller_id=settings.eric_hersteller_id,
     )
 

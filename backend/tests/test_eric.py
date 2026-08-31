@@ -26,7 +26,15 @@ from app.eric.submission_service import SubmissionError, submit_filing
 from app.eric.xml_builder import _cents_to_euro_str, _cents_to_whole_euro_str, build_est_xml
 from app.models.capital_income_statement import CapitalIncomeStatement
 from app.models.child import Child
-from app.models.enums import ChildRelationshipType, ChurchTaxType, FederalState, FilingStatus, TaxClass
+from app.models.deduction import Deduction
+from app.models.enums import (
+    ChildRelationshipType,
+    ChurchTaxType,
+    DeductionCategory,
+    FederalState,
+    FilingStatus,
+    TaxClass,
+)
 from app.models.rental_property_statement import RentalPropertyStatement
 from app.models.self_employment_statement import SelfEmploymentStatement
 from app.models.tax_filing import TaxFiling
@@ -280,6 +288,32 @@ class TestXmlBuilder:
         assert xml.count("<Kind>") == 14
         assert "Kid14" not in xml
         assert "Kid15" not in xml
+
+    def test_no_sa_block_when_no_donations(self):
+        xml = build_est_xml(_make_user(), _make_filing(), [], hersteller_id="12345")
+        assert "<SA>" not in xml
+
+    def test_no_sa_block_when_deductions_are_non_donation_categories(self):
+        deductions = [
+            Deduction(category=DeductionCategory.COMMUTE, details={"distance_km": 20, "days_worked": 200}),
+            Deduction(category=DeductionCategory.HOME_OFFICE, details={"days_claimed": 100}),
+        ]
+        xml = build_est_xml(_make_user(), _make_filing(), [], deductions=deductions, hersteller_id="12345")
+        assert "<SA>" not in xml
+
+    def test_donations_aggregate_across_rows_into_one_domestic_total(self):
+        deductions = [
+            Deduction(category=DeductionCategory.DONATIONS, details={"amount_donated_cents": 30_000}),
+            Deduction(category=DeductionCategory.DONATIONS, details={"amount_donated_cents": 20_075}),
+            # A non-donation row in the same list must not contaminate the total.
+            Deduction(category=DeductionCategory.COMMUTE, details={"distance_km": 10, "days_worked": 100}),
+        ]
+
+        xml = build_est_xml(_make_user(), _make_filing(), [], deductions=deductions, hersteller_id="12345")
+
+        assert "<SA><Zuw><Sp_MB><Foerd_st_beg_Zw_Inl><Sum_Best>" in xml
+        assert "<E0108105>500</E0108105>" in xml  # (30000+20075)/100 truncated to whole euros
+        assert "Foerd_st_beg_Zw_EU_EWR" not in xml  # domestic only -- never assumed foreign
 
     def test_capital_income_aggregates_across_institutions(self):
         stmts = [
