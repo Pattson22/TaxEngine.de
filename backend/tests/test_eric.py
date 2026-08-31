@@ -315,6 +315,96 @@ class TestXmlBuilder:
         assert "<E0108105>500</E0108105>" in xml  # (30000+20075)/100 truncated to whole euros
         assert "Foerd_st_beg_Zw_EU_EWR" not in xml  # domestic only -- never assumed foreign
 
+    def test_church_tax_paid_aggregates_via_amount_claimed_cents(self):
+        deductions = [
+            Deduction(category=DeductionCategory.CHURCH_TAX_PAID, amount_claimed_cents=45_000),
+            Deduction(category=DeductionCategory.CHURCH_TAX_PAID, amount_claimed_cents=5_099),
+        ]
+
+        xml = build_est_xml(_make_user(), _make_filing(), [], deductions=deductions, hersteller_id="12345")
+
+        assert "<SA><KiSt><Gezahlt><Sum><E0107601>500</E0107601>" in xml  # (45000+5099)/100 truncated
+        assert "Zuw" not in xml  # no donations in this case
+
+    def test_kist_comes_before_zuw_when_both_present(self):
+        deductions = [
+            Deduction(category=DeductionCategory.CHURCH_TAX_PAID, amount_claimed_cents=10_000),
+            Deduction(category=DeductionCategory.DONATIONS, details={"amount_donated_cents": 20_000}),
+        ]
+
+        xml = build_est_xml(_make_user(), _make_filing(), [], deductions=deductions, hersteller_id="12345")
+
+        kist_index = xml.index("<KiSt>")
+        zuw_index = xml.index("<Zuw>")
+        assert kist_index < zuw_index  # real schema order: KiSt precedes Zuw within SA
+
+    def test_no_sa_block_when_church_tax_paid_amount_is_zero(self):
+        deductions = [Deduction(category=DeductionCategory.CHURCH_TAX_PAID, amount_claimed_cents=0)]
+        xml = build_est_xml(_make_user(), _make_filing(), [], deductions=deductions, hersteller_id="12345")
+        assert "<SA>" not in xml
+
+    def test_no_vorsatz_block_without_elster_formatted_steuernummer(self):
+        xml = build_est_xml(_make_user(), _make_filing(), [], hersteller_id="12345")
+        assert "<Vorsatz>" not in xml
+
+    def test_no_vorsatz_block_without_steuer_id_even_with_stnr(self):
+        user = _make_user(tax_identification_number=None)
+        xml = build_est_xml(
+            user, _make_filing(), [], hersteller_id="12345", elster_formatted_steuernummer="9181081508155"
+        )
+        assert "<Vorsatz>" not in xml
+
+    def test_vorsatz_maps_single_filer(self):
+        user = _make_user(
+            first_name="Horst",
+            last_name="Mustermann",
+            tax_identification_number="12345678901",
+            street="Hermann-Geib-Str.",
+            house_number="3",
+            postal_code="93047",
+            city="Regensburg",
+        )
+        filing = _make_filing(tax_year=2024)
+
+        xml = build_est_xml(
+            user, filing, [], hersteller_id="12345", elster_formatted_steuernummer="9181081508155"
+        )
+
+        assert "<Unterfallart>10</Unterfallart>" in xml
+        assert "<Vorgang>01</Vorgang>" in xml
+        assert "<StNr>9181081508155</StNr>" in xml
+        assert "<ID>12345678901</ID>" in xml
+        assert "IDEhefrau" not in xml  # not joint assessment
+        assert "<Zeitraum>2024</Zeitraum>" in xml
+        assert "<AbsName>Mustermann Horst</AbsName>" in xml
+        assert "<AbsStr>Hermann-Geib-Str. 3</AbsStr>" in xml
+        assert "<AbsPlz>93047</AbsPlz>" in xml
+        assert "<AbsOrt>Regensburg</AbsOrt>" in xml
+        assert "<Copyright>TaxEngine.de</Copyright>" in xml
+        assert "<OrdNrArt>S</OrdNrArt>" in xml
+        assert "Rueckuebermittlung" not in xml  # no preference collected -- never guessed
+
+    def test_vorsatz_includes_spouse_id_when_joint(self):
+        spouse = _make_user(tax_identification_number="10987654321")
+        user = _make_user(is_joint_assessment=True)
+        user.spouse = spouse
+
+        xml = build_est_xml(
+            user, _make_filing(), [], hersteller_id="12345", elster_formatted_steuernummer="9181081508155"
+        )
+
+        assert "<IDEhefrau>10987654321</IDEhefrau>" in xml
+
+    def test_vorsatz_is_last_element_in_e10(self):
+        user = _make_user()
+        xml = build_est_xml(
+            user, _make_filing(), [], hersteller_id="12345", elster_formatted_steuernummer="9181081508155"
+        )
+        vorsatz_index = xml.index("<Vorsatz>")
+        e10_close_index = xml.index("</E10>")
+        assert vorsatz_index < e10_close_index
+        assert xml[xml.index("</Vorsatz>") :].startswith("</Vorsatz></E10>")
+
     def test_capital_income_aggregates_across_institutions(self):
         stmts = [
             CapitalIncomeStatement(
@@ -550,6 +640,8 @@ class _FakeLib:
         submit_ret=native_bindings.ERIC_OK,
         submit_rueckgabe=b"",
         error_text=b"",
+        make_stnr_ret=native_bindings.ERIC_OK,
+        make_stnr_result=b"",
     ):
         self.init_ret = init_ret
         self.check_ret = check_ret
@@ -557,6 +649,8 @@ class _FakeLib:
         self.submit_ret = submit_ret
         self.submit_rueckgabe = submit_rueckgabe
         self.error_text = error_text
+        self.make_stnr_ret = make_stnr_ret
+        self.make_stnr_result = make_stnr_result
         self.calls: list[tuple] = []
 
     def EricInitialisiere(self, plugin_path, log_path):
@@ -595,6 +689,11 @@ class _FakeLib:
     def EricHoleFehlerText(self, code, handle):
         handle.content = self.error_text or f"ERiC error {code}".encode()
         return native_bindings.ERIC_OK
+
+    def EricMakeElsterStnr(self, steuernr_bescheid, landesnr, bundesfinanzamtsnr, handle):
+        self.calls.append(("make_stnr", steuernr_bescheid, landesnr, bundesfinanzamtsnr))
+        handle.content = self.make_stnr_result
+        return self.make_stnr_ret
 
 
 def _make_native_client(monkeypatch, fake_lib: _FakeLib, plugin_path: str = "C:/fake/plugins") -> NativeEricClient:
@@ -711,6 +810,48 @@ class TestNativeEricClient:
         client.close()
         assert ("beende",) in fake_lib.calls
         assert client._initialized is False
+
+    def test_format_steuernummer_requires_landesnr_or_bufa_nummer(self, monkeypatch):
+        client = _make_native_client(monkeypatch, _FakeLib())
+        with pytest.raises(ValueError, match="landesnr or bundesfinanzamtsnr"):
+            client.format_steuernummer_for_elster("191/815/08155")
+
+    def test_format_steuernummer_success_prefers_bufa_nummer(self, monkeypatch):
+        fake_lib = _FakeLib(make_stnr_ret=native_bindings.ERIC_OK, make_stnr_result=b"9181081508155")
+        client = _make_native_client(monkeypatch, fake_lib)
+
+        result = client.format_steuernummer_for_elster(
+            "191/815/08155", landesnr="BY", bundesfinanzamtsnr="9181"
+        )
+
+        assert result == "9181081508155"
+        call = next(c for c in fake_lib.calls if c[0] == "make_stnr")
+        assert call == ("make_stnr", b"191/815/08155", b"BY", b"9181")
+
+    def test_format_steuernummer_bufa_nummer_only(self, monkeypatch):
+        fake_lib = _FakeLib(make_stnr_result=b"9181081508155")
+        client = _make_native_client(monkeypatch, fake_lib)
+
+        client.format_steuernummer_for_elster("191/815/08155", bundesfinanzamtsnr="9181")
+
+        call = next(c for c in fake_lib.calls if c[0] == "make_stnr")
+        assert call == ("make_stnr", b"191/815/08155", _FakeFFI.NULL, b"9181")
+
+    def test_format_steuernummer_raises_validation_error_on_pruef_fehler(self, monkeypatch):
+        fake_lib = _FakeLib(
+            make_stnr_ret=native_bindings.ERIC_GLOBAL_PRUEF_FEHLER, make_stnr_result=b"invalid Steuernummer"
+        )
+        client = _make_native_client(monkeypatch, fake_lib)
+
+        with pytest.raises(EricValidationError, match="invalid Steuernummer"):
+            client.format_steuernummer_for_elster("garbage", bundesfinanzamtsnr="9181")
+
+    def test_format_steuernummer_raises_submission_error_on_other_failure(self, monkeypatch):
+        fake_lib = _FakeLib(make_stnr_ret=999, error_text=b"unexpected failure")
+        client = _make_native_client(monkeypatch, fake_lib)
+
+        with pytest.raises(EricSubmissionError, match="unexpected failure"):
+            client.format_steuernummer_for_elster("191/815/08155", bundesfinanzamtsnr="9181")
 
 
 _REAL_SDK_PATH = os.environ.get("ERIC_SDK_PATH")

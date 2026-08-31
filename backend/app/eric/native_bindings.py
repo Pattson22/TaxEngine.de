@@ -6,11 +6,14 @@ Every signature below is copied verbatim from the ERiC 44.2.4.1 SDK's own
 Developer Area access, see docs/ELSTER_ERIC_INTEGRATION.md) -- not guessed
 or reconstructed from prose documentation. Only the subset of ERiC's much
 larger API surface this project actually calls is declared here: process
-lifecycle, buffer management, schema validation, and the unauthenticated
+lifecycle, buffer management, schema validation, the unauthenticated
 ("KOMPRIMIERT"/no-signature) submission path described in
-docs/ELSTER_ERIC_INTEGRATION.md section 6. Certificate handling, the
-Multithreading API, Otto/data-retrieval, and everything else ERiC exposes
-is out of scope until this project supports per-taxpayer certificates.
+docs/ELSTER_ERIC_INTEGRATION.md section 6, and `EricMakeElsterStnr`
+(Steuernummer format conversion, needed for the Vorsatz cover-sheet block
+-- see `app/eric/xml_builder.py`'s module docstring). Certificate
+handling, the Multithreading API, Otto/data-retrieval, and everything
+else ERiC exposes is out of scope until this project supports
+per-taxpayer certificates.
 
 `eric_druck_parameter_t` and `eric_verschluesselungs_parameter_t` are
 declared as opaque (incomplete) struct types: this project's KOMPRIMIERT
@@ -52,6 +55,10 @@ const char *EricRueckgabepufferInhalt(EricRueckgabepufferHandle handle);
 uint32_t EricRueckgabepufferLaenge(EricRueckgabepufferHandle handle);
 
 int EricHoleFehlerText(int fehlerkode, EricRueckgabepufferHandle rueckgabePuffer);
+
+int EricMakeElsterStnr(const char *steuernrBescheid, const char *landesnr,
+                        const char *bundesfinanzamtsnr,
+                        EricRueckgabepufferHandle steuernrPuffer);
 """
 
 # eric_bearbeitung_flag_t (eric_types.h) -- OR'd into EricBearbeiteVorgang's

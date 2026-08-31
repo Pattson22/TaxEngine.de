@@ -38,6 +38,10 @@ class User(Base):
             "postal_code IS NULL OR postal_code ~ '^\\d{5}$'",
             name="chk_users_postal_code_format",
         ),
+        CheckConstraint(
+            "finanzamt_bufa_nummer IS NULL OR finanzamt_bufa_nummer ~ '^\\d{4}$'",
+            name="chk_users_bufa_nummer_format",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -65,6 +69,14 @@ class User(Base):
     # count and slash grouping differ), so unlike Steuer-ID this has no
     # single regex to validate against.
     steuernummer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The filer's Finanzamt's 4-digit Bundesfinanzamtsnummer -- REQUIRED by
+    # the real ELSTER transfer envelope (NutzdatenHeader's
+    # Empfaenger id="F", see app/eric/xml_builder.py's module docstring)
+    # but distinct from steuernummer (that's the taxpayer's own number AT
+    # that Finanzamt; this is which Finanzamt). Format confirmed against
+    # the SDK's own BUFANrSType (headerbasis_datentypen.xsd): always
+    # exactly 4 digits, first two identifying the Bundesland cluster.
+    finanzamt_bufa_nummer: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     residence_state: Mapped[FederalState] = mapped_column(
         pg_enum(FederalState, "federal_state_enum"), nullable=False

@@ -226,16 +226,18 @@ Kirchensteuer + Kappung, Spendenvortrag carry-forward, the §35a
 Handwerkerleistungen credit, real Stripe payment integration, and a real
 `cffi` binding to the ERiC library — verified end-to-end against the
 actual proprietary DLL, including a real `EricCheckXML()` pass for a
-filing combining wage, capital, rental, self-employment, children's
-income, and donations all together — with `xml_builder.py`'s payload now
-mapped to the real E10 schema for every income type and deduction this
-project models (children are now first-class `app/models/child.py`
-entities, not a plain count, precisely so their real ELSTER identity data
-can be submitted); see `docs/ELSTER_ERIC_INTEGRATION.md` for exactly
-what's mapped, the two Anlagen still open for specific documented reasons
-(church tax paid directly, and the KOMPRIMIERT cover sheet), and the two
-remaining gaps (a registered `HerstellerID` and each filer's Finanzamt
-BuFa-Nummer) before a real submission is possible.
+filing combining wage, capital, rental, self-employment, and children's
+income, donations, church tax paid, and a real Vorsatz cover-sheet block
+(Steuernummer converted via the real `EricMakeElsterStnr()`) all
+together. `xml_builder.py`'s payload is now mapped to the real E10 schema
+for every income type, deduction, and cover-sheet field this project's
+data model supports (children are now first-class `app/models/child.py`
+entities, not a plain count; church tax paid directly is a new
+`DeductionCategory`; each filer's Finanzamt is now collected via
+`User.finanzamt_bufa_nummer` and wired through automatically); see
+`docs/ELSTER_ERIC_INTEGRATION.md` for exactly what's mapped and the one
+remaining blocker (a registered `HerstellerID`) before a real submission
+is possible.
 
 Frontend (`frontend/`) covers the golden path — register, dashboard, add
 wage income, add a deduction, calculate, view the refund breakdown, pay via
@@ -255,7 +257,10 @@ as a plain count — see `kinderfreibetrag.py`'s docstring; children ARE
 first-class `app/models/child.py` entities now, with a real `/children`
 CRUD API and a real Anlage Kind mapping in `xml_builder.py`, but there's
 no frontend form for them yet), AfA depreciation schedules for rental income,
-Gewerbesteuer for self-employment, a registered ELSTER `HerstellerID` and
-per-filer Finanzamt routing data (both needed before `NativeEricClient`
-can be pointed at a real submission — see `docs/ELSTER_ERIC_INTEGRATION.md`),
-frontend forms for the remaining income types, and automated frontend tests.
+Gewerbesteuer for self-employment, a registered ELSTER `HerstellerID`
+(the one remaining blocker before `NativeEricClient` can be pointed at a
+real submission — see `docs/ELSTER_ERIC_INTEGRATION.md`; per-filer
+Finanzamt routing is now collected via `User.finanzamt_bufa_nummer`),
+frontend forms for the remaining income types (including a `/children`
+form and a church-tax-paid/donations deductions form), and automated
+frontend tests.

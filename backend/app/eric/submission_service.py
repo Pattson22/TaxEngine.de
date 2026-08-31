@@ -123,6 +123,7 @@ def submit_filing(
         children,
         deductions,
         hersteller_id=settings.eric_hersteller_id,
+        finanzamt_bufa_nummer=user.finanzamt_bufa_nummer,
     )
 
     # "ESt_<Jahr>" is the real ERiC datenartVersion for an income tax

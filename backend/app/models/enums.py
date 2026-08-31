@@ -72,6 +72,15 @@ class DeductionCategory(str, Enum):
     DONATIONS = "DONATIONS"
     CHILDCARE = "CHILDCARE"
     HANDWERKERLEISTUNGEN = "HANDWERKERLEISTUNGEN"
+    # Kirchensteuer actually PAID (§10 Abs. 1 Nr. 4 EStG) -- e.g. direct
+    # quarterly payments to the Kirchensteueramt -- as opposed to church
+    # tax already WITHHELD via wage/capital income (wage_tax_certificates.
+    # church_tax_withheld_cents / capital_income_statements.
+    # church_tax_withheld_cents), which is a legally separate figure (see
+    # app/eric/xml_builder.py's module docstring for why ERiC's own SA/KiSt
+    # field documentation draws this same distinction). Fully deductible as
+    # a Sonderausgabe, no 20%-of-income cap like DONATIONS has.
+    CHURCH_TAX_PAID = "CHURCH_TAX_PAID"
     OTHER = "OTHER"
 
 

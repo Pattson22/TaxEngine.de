@@ -40,6 +40,7 @@ class UserUpdate(BaseModel):
     postal_code: str | None = Field(default=None, pattern=r"^\d{5}$")
     city: str | None = Field(default=None, min_length=1)
     steuernummer: str | None = Field(default=None, min_length=1, max_length=20)
+    finanzamt_bufa_nummer: str | None = Field(default=None, pattern=r"^\d{4}$")
 
 
 class UserRead(BaseModel):
@@ -56,6 +57,7 @@ class UserRead(BaseModel):
     postal_code: str | None
     city: str | None
     steuernummer: str | None
+    finanzamt_bufa_nummer: str | None
     residence_state: FederalState
     tax_class: TaxClass
     church_tax_type: ChurchTaxType

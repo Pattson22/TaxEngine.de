@@ -99,12 +99,14 @@ class NativeEricClient(EricClient):
     - It never requests a PDF (`druckParameter` is always NULL) -- the
       KOMPRIMIERT paper cover sheet is generated separately by
       `cover_sheet.py`, not by ERiC's own print facility.
-    - `xml_builder.py`'s payload below `<Steuerfall>` is still
-      illustrative, not the real E10 schema (see that module's docstring)
-      -- so a real EricCheckXML()/EricBearbeiteVorgang() call through this
-      class will legitimately fail plausibility checking today. That's
-      the honest, expected outcome of pointing a real validator at a
-      placeholder payload, not a bug in this class.
+    - `xml_builder.py` maps most real E10 Anlagen now (verified against
+      this exact class -- see docs/ELSTER_ERIC_INTEGRATION.md), but the
+      Vorsatz block still needs `format_steuernummer_for_elster()` below
+      called first and its result threaded in; without a `HerstellerID`
+      and a filer's Finanzamt BuFa-Nummer, EricCheckXML()/
+      EricBearbeiteVorgang() will still legitimately reject the XML --
+      the honest, expected outcome of those still-open gaps, not a bug in
+      this class.
     - Per docs/ELSTER_ERIC_INTEGRATION.md section 2, ericapi.dll/.so must
       never be loaded inside the main FastAPI web process (crash
       isolation, ERiC's yearly-versioned release cycle, ctypes/cffi memory
@@ -220,6 +222,52 @@ class NativeEricClient(EricClient):
         finally:
             lib.EricRueckgabepufferFreigeben(rueckgabe_handle)
             lib.EricRueckgabepufferFreigeben(serverantwort_handle)
+
+    def format_steuernummer_for_elster(
+        self,
+        steuernummer: str,
+        *,
+        landesnr: str | None = None,
+        bundesfinanzamtsnr: str | None = None,
+    ) -> str:
+        """Converts a regional Steuernummer (as printed on official
+        letters, e.g. "191/815/08155") into ERiC's unified 13-digit
+        format, via the real `EricMakeElsterStnr()` -- needed for the
+        Vorsatz cover-sheet block's `StNr` field (see xml_builder.py's
+        module docstring). At least one of `landesnr` (2-letter Bundesland
+        code) or `bundesfinanzamtsnr` (4-digit BuFa-Nummer) is required by
+        the real API; for Bavarian/Berlin Steuernummern in BBB/UUUUP
+        format it REQUIRES `bundesfinanzamtsnr` specifically (its own docs
+        are explicit about this), so prefer passing that when known.
+
+        Raises:
+            ValueError: if neither `landesnr` nor `bundesfinanzamtsnr` is given.
+            EricValidationError: if ERiC rejects the Steuernummer/routing combination.
+            EricSubmissionError: on any other ERiC error.
+        """
+        if not landesnr and not bundesfinanzamtsnr:
+            raise ValueError(
+                "format_steuernummer_for_elster requires landesnr or bundesfinanzamtsnr "
+                "(or both) -- EricMakeElsterStnr rejects having neither."
+            )
+        self._ensure_initialized()
+        lib, ffi = self._library.lib, self._library.ffi
+
+        handle = self._new_buffer()
+        try:
+            ret = lib.EricMakeElsterStnr(
+                steuernummer.encode("utf-8"),
+                landesnr.encode("utf-8") if landesnr else ffi.NULL,
+                bundesfinanzamtsnr.encode("utf-8") if bundesfinanzamtsnr else ffi.NULL,
+                handle,
+            )
+            if ret == native_bindings.ERIC_OK:
+                return self._read_buffer(handle)
+            if ret == native_bindings.ERIC_GLOBAL_PRUEF_FEHLER:
+                raise EricValidationError(self._read_buffer(handle) or self._error_text(ret))
+            raise EricSubmissionError(self._error_text(ret))
+        finally:
+            lib.EricRueckgabepufferFreigeben(handle)
 
     @staticmethod
     def _extract_telenummer(rueckgabe_xml: str) -> str | None:

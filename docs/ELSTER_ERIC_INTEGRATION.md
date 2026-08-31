@@ -116,20 +116,44 @@ combining every mapped Anlage at once (wages, capital income, a rental
 property, self-employment, a child, and donations) passes `EricCheckXML()`
 cleanly (`ERIC_OK`).
 
-Two Anlagen remain deliberately unmapped, each for a specific, real
-reason rather than "not gotten to yet":
-- `SA/KiSt` (church tax PAID, e.g. direct payments to the
-  Kirchensteueramt): its own field documentation explicitly EXCLUDES
-  church tax already withheld as an Abgeltungsteuer surcharge -- i.e. it's
-  a legally different figure from what `N`/`KAP` already declare as
-  withheld, not a restatement of it. This project doesn't collect "church
-  tax paid directly, outside withholding" anywhere, so deriving this box
-  from already-withheld figures would misrepresent what it means.
-- The KOMPRIMIERT cover-sheet block (`Vorsatz`) needs the filer's
-  Steuernummer in ERiC's own unified 13-digit format, produced by
-  `EricMakeElsterStnr()` -- not yet bound in `native_bindings.py` (which
-  only declares the subset of the API the KOMPRIMIERT-unauthenticated
-  flow needs today). Real, separate work, not a drive-by addition.
+**Sixth update**: the two remaining Anlagen are now closed, plus the
+Finanzamt-routing gap:
+
+- **`User.finanzamt_bufa_nummer`** is a new field (migration
+  `f4b1c9a02e7d`), collected the same way `steuernummer` already is.
+  `submission_service.py` now passes it through automatically -- the
+  `NutzdatenHeader` Finanzamt-routing gap is closed for any user who's
+  entered theirs.
+- **`SA/KiSt` (church tax PAID)** turned out to need real data collection,
+  not just plumbing: its field documentation explicitly EXCLUDES church
+  tax already withheld as an Abgeltungsteuer surcharge (a legally
+  different figure from what `N`/`KAP` declare as withheld), and this
+  project had nowhere to collect "church tax paid directly" at all. A new
+  `DeductionCategory.CHURCH_TAX_PAID` (migration `b6e7f3a19c04`) closes
+  that gap for real -- wired into `apply_sonderausgaben_pauschbetrag`
+  (fully deductible, no 20% cap) exactly as that function's own docstring
+  already described "church tax paid" as an expected Sonderausgabe, and
+  mapped to `KiSt/Gezahlt/Sum/E0107601` in `xml_builder.py`.
+- **`Vorsatz` (the KOMPRIMIERT cover-sheet block)** needed one thing this
+  project genuinely couldn't compute itself: the filer's Steuernummer in
+  ERiC's unified 13-digit format. `EricMakeElsterStnr()` is now bound in
+  `native_bindings.py` and exposed as
+  `NativeEricClient.format_steuernummer_for_elster()` -- verified against
+  the real library: converting `"181/815/08155"` with
+  `bundesfinanzamtsnr="9181"` really returns `"9181081508155"`, matching
+  the SDK's own example. `xml_builder.py` accepts the pre-computed result
+  (staying ERiC/DLL-free itself, per its own design) and omits the whole
+  block without it. A document combining wages and a real Vorsatz block
+  (real StNr, both filer IDs, sender address mirroring
+  `cover_sheet.py`'s existing logic) passes `EricCheckXML()` cleanly
+  (`ERIC_OK`).
+
+Every real Anlage this project's data model can support is now mapped in
+`xml_builder.py`. What's left before a real submission is possible is no
+longer schema research: a registered `HerstellerID`, and wiring
+`NativeEricClient` (including the new `format_steuernummer_for_elster()`
+step) into a real `eric-submitter` worker process per §2 below -- it's
+still never loaded inside the FastAPI web process.
 
 **Correction to an earlier version of this doc**: obtaining the ERiC
 library itself is a *free developer registration* at

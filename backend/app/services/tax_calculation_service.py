@@ -90,6 +90,7 @@ _WERBUNGSKOSTEN_CATEGORIES = frozenset({
 _SONDERAUSGABEN_CATEGORIES = frozenset({
     DeductionCategory.INSURANCE,
     DeductionCategory.CHILDCARE,
+    DeductionCategory.CHURCH_TAX_PAID,
 })
 _CREDIT_CATEGORIES = frozenset({DeductionCategory.HANDWERKERLEISTUNGEN})
 
@@ -340,8 +341,11 @@ def _resolve_deduction_amount_cents(deduction: Deduction, tax_year: int) -> int:
             f"`details` payload for that category: {exc}"
         ) from exc
 
-    # WORK_EQUIPMENT, FURTHER_EDUCATION, DOUBLE_HOUSEHOLD, INSURANCE, OTHER:
-    # no dedicated app.tax_engine algorithm yet -- trust the client-submitted total.
+    # WORK_EQUIPMENT, FURTHER_EDUCATION, DOUBLE_HOUSEHOLD, INSURANCE,
+    # CHURCH_TAX_PAID, OTHER: no dedicated app.tax_engine algorithm --
+    # trust the client-submitted total (church tax paid directly has no
+    # formula to recompute from structured inputs the way commute/
+    # childcare/etc. do; it's a self-reported figure by nature).
     return deduction.amount_claimed_cents or 0
 
 

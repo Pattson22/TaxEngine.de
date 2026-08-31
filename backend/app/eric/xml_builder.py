@@ -61,35 +61,47 @@ of a real field identifier, cross-checked against the schema's own
   module: the child lived with the family, and that relationship existed,
   for the full calendar year -- no partial-year modeling, matching
   `kinderfreibetrag.py`'s own documented scope limitation).
-- `SA` (Sonderausgaben), donations only: `Zuw/Sp_MB/Foerd_st_beg_Zw_Inl`
-  carries the combined total across every DONATIONS-category `deductions`
-  row for the year (`Sum_Best/E0108105`), aggregated with the exact same
-  rule as `tax_calculation_service._aggregate_donations_this_year` (the
-  20% cap applies to the SUM, not per-row -- see that function's own
-  docstring for the real bug this once caught). Always filed as
-  `Foerd_st_beg_Zw_Inl` (domestic recipients) -- the data model doesn't
-  collect a recipient organization or country, so foreign-recipient
-  donations (`Foerd_st_beg_Zw_EU_EWR`) can never be distinguished and are
-  never assumed.
+- `SA` (Sonderausgaben): `Zuw/Sp_MB/Foerd_st_beg_Zw_Inl` carries the
+  combined total across every DONATIONS-category `deductions` row for the
+  year (`Sum_Best/E0108105`), aggregated with the exact same rule as
+  `tax_calculation_service._aggregate_donations_this_year` (the 20% cap
+  applies to the SUM, not per-row -- see that function's own docstring
+  for the real bug this once caught). Always filed as `Foerd_st_beg_Zw_Inl`
+  (domestic recipients) -- the data model doesn't collect a recipient
+  organization or country, so foreign-recipient donations
+  (`Foerd_st_beg_Zw_EU_EWR`) can never be distinguished and are never
+  assumed. `KiSt/Gezahlt/Sum/E0107601` carries the combined total across
+  every CHURCH_TAX_PAID-category `deductions` row -- a NEW deduction
+  category added specifically for this box, since it's a legally
+  DIFFERENT figure from the church tax `N`/`KAP` already declare as
+  withheld (that field's own documentation explicitly excludes amounts
+  "als Zuschlag zur Abgeltungsteuer einbehalten oder gezahlt" -- withheld
+  as a capital-gains surcharge), not a restatement of it; deriving it from
+  the withheld figures would have misrepresented what the field means, so
+  real data collection (`DeductionCategory.CHURCH_TAX_PAID`, fully
+  deductible with no 20% cap, wired into `apply_sonderausgaben_pauschbetrag`
+  exactly as that function's own docstring already described it) was
+  added instead of guessing.
+- `Vorsatz` (the KOMPRIMIERT cover-sheet block): `Unterfallart`/`Vorgang`
+  are the schema's own fixed values for a standard ESt Veranlagung;
+  `ID`/`IDEhefrau` are the Steuer-ID(s) already used everywhere else in
+  this module; `AbsName`/`AbsStr`/`AbsPlz`/`AbsOrt` mirror `cover_sheet.py`'s
+  existing sender-address logic; `OrdNrArt` is always `"S"` (we identify
+  by Steuernummer, never by an ELSTER-assigned Ordnungsbegriff a first
+  filing wouldn't have). `StNr` is the one field this module genuinely
+  CANNOT compute itself: it needs the real `EricMakeElsterStnr()` call
+  (via `NativeEricClient.format_steuernummer_for_elster()`) to convert
+  `user.steuernummer` into ERiC's unified 13-digit format -- since this
+  module stays ERiC/DLL-free by design (see its own docstring), that
+  conversion is the CALLER's job; `elster_formatted_steuernummer` is
+  accepted pre-computed, and the whole `Vorsatz` block is simply omitted
+  without it, same as every other real-but-optional gap here.
 
-## What's deliberately NOT mapped yet -- omitted, not guessed
-- `SA/KiSt` (church tax PAID, e.g. direct quarterly payments to the
-  Kirchensteueramt): its own field documentation is explicit that this
-  box excludes "soweit diese ... als Zuschlag zur Abgeltungsteuer
-  einbehalten oder gezahlt wurde" (church tax already withheld as a
-  capital-gains surcharge) -- i.e. it's legally a DIFFERENT figure from
-  the church tax `N`/`KAP` already declare as withheld, not a
-  restatement of it. This project doesn't collect "church tax paid
-  directly, outside withholding" anywhere, and deriving this box from
-  the withheld figures already declared elsewhere would misrepresent
-  what it means -- so it's left out rather than guessed at.
-- The KOMPRIMIERT cover-sheet block (`Vorsatz`) needs the filer's
-  Steuernummer in ERiC's own unified 13-digit format, which the real API
-  provides via `EricMakeElsterStnr()` -- not yet bound in
-  `native_bindings.py` (only the subset of the API this project's
-  KOMPRIMIERT-unauthenticated flow needs is declared there today) -- so
-  this Anlage is real, separate research/implementation work, not a
-  drive-by addition.
+There is no `## What's deliberately NOT mapped yet` section anymore --
+every real Anlage this project's data model can support is now mapped.
+`Rueckuebermittlung/Bescheid` (electronic Bescheid delivery opt-in) inside
+`Vorsatz` is the one field genuinely left out: no such user preference is
+collected anywhere, and it's optional in the real schema.
 
 There is also no "computed tax" element in the real E10 schema at all --
 ERiC/the Finanzamt compute the assessment FROM the declared income; a
@@ -99,19 +111,21 @@ filer never submits their own calculated `Einkommensteuer`/
 anywhere below, unlike the old illustrative version of this file's
 fabricated `<Berechnung>` block.
 
-Two known gaps block ever pointing this at a real endpoint, tracked
-separately from field-code correctness, and both CONFIRMED by actually
-running generated output through the real EricCheckXML() (not assumed):
-- `HerstellerID` (BZSt-issued once this project registers as a software
-  manufacturer -- see docs/ELSTER_ERIC_INTEGRATION.md) must be supplied
-  by the caller; there is no valid default.
-- The filer's Finanzamt BuFa-Nummer (`NutzdatenHeader`'s
-  `Empfaenger id="F"`) isn't collected anywhere in the data model yet.
-  `finanzamt_bufa_nummer` is accepted as optional and simply omitted if
-  not supplied, BUT EricCheckXML() rejects a `NutzdatenHeader` missing it
-  outright ("missing elements in content model") -- it is a hard
-  requirement of the real schema, not just supplementary routing data, so
-  no XML built without it will ever pass real validation.
+One known gap blocks ever pointing this at a real endpoint, tracked
+separately from field-code correctness, and CONFIRMED by actually running
+generated output through the real EricCheckXML() (not assumed):
+`HerstellerID` (BZSt-issued once this project registers as a software
+manufacturer -- see docs/ELSTER_ERIC_INTEGRATION.md) must be supplied by
+the caller; there is no valid default.
+
+The filer's Finanzamt BuFa-Nummer (`NutzdatenHeader`'s `Empfaenger
+id="F"`) IS now collected -- `User.finanzamt_bufa_nummer` -- and
+`submission_service.py` passes it through automatically. It's still an
+optional parameter here (omitted, not defaulted, when a user hasn't
+entered theirs yet), but EricCheckXML() rejects a `NutzdatenHeader`
+missing it outright ("missing elements in content model") -- it's a hard
+requirement of the real schema, not just supplementary routing data, so
+no XML built without it will ever pass real validation.
 
 Uses stdlib `xml.etree.ElementTree` (not manual string formatting) so
 user-supplied text (names, addresses) is correctly XML-escaped rather than
@@ -255,6 +269,7 @@ def build_est_xml(
     *,
     hersteller_id: str,
     finanzamt_bufa_nummer: str | None = None,
+    elster_formatted_steuernummer: str | None = None,
 ) -> str:
     """Serialize one user/filing's real-schema-mapped data into the E10 XML
     payload for an ESt submission -- see this module's docstring for
@@ -283,18 +298,25 @@ def build_est_xml(
             schema's own limit). Independent of `filing.number_of_children`,
             which still drives the Günstigerprüfung calculation itself --
             see `app.models.child.Child`'s docstring for why.
-        deductions: this filing's deductions rows -- only DONATIONS-category
-            rows are used (Anlage SA's `Zuw/Sp_MB/Foerd_st_beg_Zw_Inl`,
-            aggregated exactly like `_aggregate_donations_this_year` in
-            `tax_calculation_service.py`); every other category is not yet
-            mapped, see this module's docstring.
+        deductions: this filing's deductions rows -- only DONATIONS
+            (Anlage SA's `Zuw/Sp_MB/Foerd_st_beg_Zw_Inl`, aggregated
+            exactly like `_aggregate_donations_this_year` in
+            `tax_calculation_service.py`) and CHURCH_TAX_PAID
+            (`KiSt/Gezahlt/Sum/E0107601`) rows are used; every other
+            category isn't mapped yet, see this module's docstring.
         hersteller_id: BZSt-issued manufacturer id (required by the real
             TransferHeader schema, no valid default -- see
             docs/ELSTER_ERIC_INTEGRATION.md for the registration status).
         finanzamt_bufa_nummer: the filer's Finanzamt's 4-digit
-            Bundesfinanzamtsnummer, if known -- not currently collected
-            anywhere in the data model, so omitted (no `Empfaenger id="F"`)
-            when not supplied.
+            Bundesfinanzamtsnummer -- `submission_service.py` passes
+            `user.finanzamt_bufa_nummer` here; omitted (no
+            `Empfaenger id="F"`) if the user hasn't entered theirs yet.
+        elster_formatted_steuernummer: `user.steuernummer` already
+            converted to ERiC's unified 13-digit format via
+            `NativeEricClient.format_steuernummer_for_elster()` -- a real
+            ERiC call, so this function (which stays ERiC/DLL-free by
+            design) never computes it itself; the caller must. The entire
+            `Vorsatz` block is omitted when this isn't supplied.
 
     Returns:
         A UTF-8 XML string. Still needs `EricClient.validate_xml()` --
@@ -380,28 +402,42 @@ def build_est_xml(
     # (same DonationDetails schema, same "combined total across every
     # DONATIONS row" rule -- the 20% cap applies to the sum, not per-row).
     total_donations_cents = 0
+    # CHURCH_TAX_PAID rows use the same "trust amount_claimed_cents"
+    # resolution as tax_calculation_service._resolve_deduction_amount_cents
+    # (no computed algorithm -- it's self-reported by nature).
+    total_church_tax_paid_cents = 0
     for deduction in deductions:
-        if deduction.category != DeductionCategory.DONATIONS:
-            continue
-        total_donations_cents += DonationDetails.model_validate(deduction.details).amount_donated_cents
+        if deduction.category == DeductionCategory.DONATIONS:
+            total_donations_cents += DonationDetails.model_validate(deduction.details).amount_donated_cents
+        elif deduction.category == DeductionCategory.CHURCH_TAX_PAID:
+            total_church_tax_paid_cents += deduction.amount_claimed_cents or 0
 
-    if total_donations_cents > 0:
+    if total_donations_cents > 0 or total_church_tax_paid_cents > 0:
         sa = ET.SubElement(e10, "SA")
-        zuw = ET.SubElement(sa, "Zuw")
-        sp_mb = ET.SubElement(zuw, "Sp_MB")
-        # Foerd_st_beg_Zw_Inl = donations to DOMESTIC tax-privileged
-        # recipients -- the general-purpose donation box, and the only one
-        # this project's data model can support (no recipient
-        # country/organization is collected, so foreign-recipient
-        # donations -- Foerd_st_beg_Zw_EU_EWR -- can't be distinguished
-        # and are never assumed). SA/KiSt (church tax PAID directly, not
-        # withheld) is deliberately NOT mapped -- see this module's
-        # docstring.
-        foerd_inl = ET.SubElement(sp_mb, "Foerd_st_beg_Zw_Inl")
-        sum_best = ET.SubElement(foerd_inl, "Sum_Best")
-        ET.SubElement(sum_best, "E0108105").text = _cents_to_whole_euro_str(
-            total_donations_cents
-        )  # zur Förderung steuerbegünstigter Zwecke an Empfänger im Inland
+
+        # KiSt comes before Zuw in the real schema's own element order.
+        if total_church_tax_paid_cents > 0:
+            ki_st = ET.SubElement(sa, "KiSt")
+            gezahlt = ET.SubElement(ki_st, "Gezahlt")
+            gezahlt_sum = ET.SubElement(gezahlt, "Sum")
+            ET.SubElement(gezahlt_sum, "E0107601").text = _cents_to_whole_euro_str(
+                total_church_tax_paid_cents
+            )  # Kirchensteuer gezahlt (soweit nicht als KapESt-Zuschlag einbehalten/gezahlt)
+
+        if total_donations_cents > 0:
+            zuw = ET.SubElement(sa, "Zuw")
+            sp_mb = ET.SubElement(zuw, "Sp_MB")
+            # Foerd_st_beg_Zw_Inl = donations to DOMESTIC tax-privileged
+            # recipients -- the general-purpose donation box, and the only
+            # one this project's data model can support (no recipient
+            # country/organization is collected, so foreign-recipient
+            # donations -- Foerd_st_beg_Zw_EU_EWR -- can't be distinguished
+            # and are never assumed).
+            foerd_inl = ET.SubElement(sp_mb, "Foerd_st_beg_Zw_Inl")
+            sum_best = ET.SubElement(foerd_inl, "Sum_Best")
+            ET.SubElement(sum_best, "E0108105").text = _cents_to_whole_euro_str(
+                total_donations_cents
+            )  # zur Förderung steuerbegünstigter Zwecke an Empfänger im Inland
 
     # Kind's real maxOccurs is 14 -- one <Kind> block per child, not
     # aggregated like N/KAP's per-source totals.
@@ -544,6 +580,35 @@ def build_est_xml(
         ET.SubElement(sonst_sum, "E0705607").text = _cents_to_whole_euro_str(
             stmt.deductible_expenses_cents
         )  # Abzugsfähige Werbungskosten
+
+    # Vorsatz is last in the real E10 element order (after V/V_FeWo/
+    # V_Sonstige/FW/VOR/AV/Mob, none of which this module maps). The whole
+    # block needs a real ERiC-converted Steuernummer (StNr) to be
+    # meaningful -- see this function's docstring -- so it's omitted
+    # entirely without one, same as every other real-but-optional gap in
+    # this module.
+    if elster_formatted_steuernummer and user.tax_identification_number:
+        vorsatz = ET.SubElement(e10, "Vorsatz")
+        ET.SubElement(vorsatz, "Unterfallart").text = "10"  # ESt -- the schema's own documented fixed value
+        ET.SubElement(vorsatz, "Vorgang").text = "01"  # Veranlagung (standard assessment)
+        ET.SubElement(vorsatz, "StNr").text = elster_formatted_steuernummer
+        ET.SubElement(vorsatz, "ID").text = user.tax_identification_number
+        if spouse is not None:
+            _sub(vorsatz, "IDEhefrau", spouse.tax_identification_number)
+        ET.SubElement(vorsatz, "Zeitraum").text = str(filing.tax_year)
+        _sub(vorsatz, "AbsName", f"{user.last_name} {user.first_name}".strip())
+        if user.street:
+            _sub(vorsatz, "AbsStr", f"{user.street} {user.house_number or ''}".strip())
+        _sub(vorsatz, "AbsPlz", user.postal_code)
+        _sub(vorsatz, "AbsOrt", user.city)
+        ET.SubElement(vorsatz, "Copyright").text = "TaxEngine.de"
+        # OrdNrArt "S" -- we identify the filing by Steuernummer (StNr
+        # above), never by Ordnungsbegriff ("O"), which this project
+        # doesn't have (that's an ELSTER-assigned reference from a PRIOR
+        # electronic filing's response, not something a first submission
+        # has). Rueckuebermittlung/Bescheid (electronic Bescheid delivery
+        # opt-in) is omitted -- no such preference is collected anywhere.
+        ET.SubElement(vorsatz, "OrdNrArt").text = "S"
 
     # `encoding="unicode"` makes ElementTree return a str, but it then
     # NEVER emits an XML declaration regardless of `xml_declaration` --
