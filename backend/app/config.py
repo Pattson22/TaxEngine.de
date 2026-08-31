@@ -53,6 +53,15 @@ class Settings(BaseSettings):
     s3_secret_access_key: str = "placeholder_override_in_env"
     s3_region: str = "us-east-1"
 
+    # Path to one platform's extracted ERiC SDK directory (the contents of
+    # ERiC-<version>-<Platform>.jar, itself a zip -- see
+    # app/eric/native_bindings.py and docs/ELSTER_ERIC_INTEGRATION.md).
+    # Only read by NativeEricClient, which isn't wired into the FastAPI
+    # app by default (ERiC must never load inside the web process --
+    # ELSTER_ERIC_INTEGRATION.md section 2), so this stays unset/unused
+    # for the app itself; a future eric-submitter worker reads it directly.
+    eric_sdk_path: str | None = None
+
     environment: str = "development"
 
 

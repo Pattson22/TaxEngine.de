@@ -2,18 +2,37 @@
 
 ## Implementation status
 
-`backend/app/eric/` scaffolds everything below that CAN exist without the
-real ERiC library: `xml_builder.py` (real XML generation, tested),
-`submission_service.py` (the full validate→submit→persist orchestration,
-wired to `POST /tax-filings/{id}/submit`), `client.py`'s `EricClient`
-abstraction with a fully-working `StubEricClient` (always "succeeds", used
-for local dev/testing) plus a `NativeEricClient` that raises
-`NotImplementedError` with exact instructions for what completing it
-requires, and `cover_sheet.py` (the KOMPRIMIERT paper cover sheet, see
-§6 below). The XML shape below `<Steuerfall>` is illustrative — the real
-Datenartenkatalog field names are BZSt-developer-only and not something
-this project has access to yet. See `xml_builder.py`'s docstring for the
-full caveat before this is ever pointed at a real ELSTER endpoint.
+**Update**: ELSTER Developer Area access was obtained and the license
+agreement for ERiC 44 accepted (free, per the correction below). The real
+SDK -- `ericapi.dll`/`libericapi.so`, the full API reference, and the real
+Datenartenkatalog schemas/examples for every Elster data type including
+`ESt` -- has been downloaded and `app/eric/native_bindings.py` now binds
+to it for real via `cffi`, not `ctypes` guesswork: every declared
+signature was copied verbatim from the SDK's own `include/ericapi.h`, and
+`NativeEricClient` (`client.py`) was verified end-to-end against the real
+Windows x86_64 library -- `EricInitialisiere()` succeeds, `EricCheckXML()`
+correctly rejects garbage XML with a genuine German plausibility error,
+and correctly accepts the SDK's own `est_e10_2024.xml` example. What's
+still open, deliberately not attempted in that same pass:
+
+- **`xml_builder.py`'s payload below `<Steuerfall>` is still
+  illustrative**, not the real E10 schema -- the real schema uses opaque
+  numeric field identifiers (e.g. `E0100001`) nested under semantic
+  groups, nothing like the current placeholder shape. A real
+  `EricCheckXML()` call against today's generated XML will legitimately
+  fail; rewriting it against `Dokumentation/Datenarten/ElsterErklaerung/ESt/`
+  in the SDK (schemas, `Jahresdokumentation` field-mapping spreadsheets,
+  and example XML per year) is its own project, not a drive-by fix.
+- **`NativeEricClient` is not wired into `submission_service.py`'s
+  default path** -- per §2 below, ERiC must never load inside the main
+  FastAPI web process, so it's only meant to be instantiated by a future
+  separate `eric-submitter` worker (also not built yet). It's fully usable
+  standalone today (e.g. from a script) for integration testing against
+  the real library.
+- The datenartVersion for an income tax return is `ESt_<Jahr>` (e.g.
+  `"ESt_2024"`), confirmed against the SDK's `Datenartversionmatrix.ods`
+  and threaded through `EricClient.validate_xml()`/`submit()` from
+  `TaxFiling.tax_year`.
 
 **Correction to an earlier version of this doc**: obtaining the ERiC
 library itself is a *free developer registration* at

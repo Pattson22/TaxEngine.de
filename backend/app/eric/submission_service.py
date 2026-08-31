@@ -107,9 +107,14 @@ def submit_filing(
         self_employment_statements,
     )
 
+    # "ESt_<Jahr>" is the real ERiC datenartVersion for an income tax
+    # return, confirmed against the SDK's own Datenartversionmatrix.ods
+    # (also matches the per-year plugin naming, e.g. checkESt_2024.dll).
+    datenart_version = f"ESt_{filing.tax_year}"
+
     try:
-        eric_client.validate_xml(xml)
-        result = eric_client.submit(xml)
+        eric_client.validate_xml(xml, datenart_version=datenart_version)
+        result = eric_client.submit(xml, datenart_version=datenart_version)
     except EricValidationError as exc:
         filing.elster_rejection_reason = f"ERiC validation failed: {exc}"
         db.commit()

@@ -28,6 +28,9 @@ python-docx==1.1.2         # text extraction from .docx (Claude's document block
 # --- PDF generation ---
 reportlab==4.2.5           # komprimierte Steuererklärung cover sheet (see app/eric/cover_sheet.py)
 
+# --- ERiC (ELSTER Rich Client) native bridge ---
+cffi==1.17.1                # binds to the real ericapi.dll/.so, see app/eric/native_bindings.py
+
 # --- Testing ---
 pytest==8.3.3
 pytest-cov==5.0.0

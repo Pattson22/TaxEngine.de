@@ -6,12 +6,15 @@ as tests/test_payment_service.py) since it doesn't need a real database to
 prove its own orchestration logic.
 """
 
+import os
 import uuid
 from unittest.mock import MagicMock
 
 import pytest
 
+from app.eric import native_bindings
 from app.eric.client import (
+    EricSubmissionError,
     EricSubmissionResult,
     EricValidationError,
     NativeEricClient,
@@ -195,14 +198,223 @@ class TestStubEricClient:
         assert result.transfer_ticket.startswith("STUB-")
 
 
-class TestNativeEricClientIsUnimplemented:
-    def test_validate_xml_raises_not_implemented(self):
-        with pytest.raises(NotImplementedError):
-            NativeEricClient().validate_xml("<Elster></Elster>")
+class _FakeFFI:
+    """Stands in for cffi.FFI in tests -- real cffi cdata can't be built
+    without a loaded library, so buffer handles here are plain Python
+    objects rather than actual C pointers."""
 
-    def test_submit_raises_not_implemented(self):
-        with pytest.raises(NotImplementedError):
-            NativeEricClient().submit("<Elster></Elster>")
+    NULL = object()
+
+    @staticmethod
+    def buffer(content, length):
+        return content[:length]
+
+
+class _FakeHandle:
+    def __init__(self):
+        self.content = b""
+
+
+class _FakeLib:
+    """Fakes the subset of ericapi's C surface NativeEricClient calls,
+    with return codes/buffer contents configurable per test -- mirrors
+    real ERiC semantics closely enough to exercise client.py's branching
+    without needing the actual proprietary library."""
+
+    def __init__(
+        self,
+        *,
+        init_ret=native_bindings.ERIC_OK,
+        check_ret=native_bindings.ERIC_OK,
+        check_text=b"",
+        submit_ret=native_bindings.ERIC_OK,
+        submit_rueckgabe=b"",
+        error_text=b"",
+    ):
+        self.init_ret = init_ret
+        self.check_ret = check_ret
+        self.check_text = check_text
+        self.submit_ret = submit_ret
+        self.submit_rueckgabe = submit_rueckgabe
+        self.error_text = error_text
+        self.calls: list[tuple] = []
+
+    def EricInitialisiere(self, plugin_path, log_path):
+        self.calls.append(("init", plugin_path, log_path))
+        return self.init_ret
+
+    def EricBeende(self):
+        self.calls.append(("beende",))
+        return native_bindings.ERIC_OK
+
+    def EricRueckgabepufferErzeugen(self):
+        return _FakeHandle()
+
+    def EricRueckgabepufferFreigeben(self, handle):
+        self.calls.append(("freigeben", handle))
+        return native_bindings.ERIC_OK
+
+    def EricRueckgabepufferInhalt(self, handle):
+        return handle.content
+
+    def EricRueckgabepufferLaenge(self, handle):
+        return len(handle.content)
+
+    def EricCheckXML(self, xml, datenart_version, handle):
+        self.calls.append(("check", xml, datenart_version))
+        handle.content = self.check_text
+        return self.check_ret
+
+    def EricBearbeiteVorgang(
+        self, xml, datenart_version, flags, druck_parameter, crypto_parameter, rueckgabe, serverantwort
+    ):
+        self.calls.append(("submit", xml, datenart_version, flags, druck_parameter, crypto_parameter))
+        rueckgabe.content = self.submit_rueckgabe
+        return self.submit_ret
+
+    def EricHoleFehlerText(self, code, handle):
+        handle.content = self.error_text or f"ERiC error {code}".encode()
+        return native_bindings.ERIC_OK
+
+
+def _make_native_client(monkeypatch, fake_lib: _FakeLib, plugin_path: str = "C:/fake/plugins") -> NativeEricClient:
+    from app.eric import client as client_module
+
+    fake_library = native_bindings.EricLibrary(ffi=_FakeFFI(), lib=fake_lib, plugin_path=plugin_path)
+    monkeypatch.setattr(client_module.native_bindings, "load", lambda sdk_path: fake_library)
+    return NativeEricClient(sdk_path="unused")
+
+
+class TestNativeBindingsLoad:
+    def test_raises_when_library_missing(self, tmp_path):
+        with pytest.raises(native_bindings.EricLibraryNotFoundError):
+            native_bindings.load(tmp_path)
+
+
+class TestNativeEricClient:
+    def test_validate_xml_requires_datenart_version(self, monkeypatch):
+        client = _make_native_client(monkeypatch, _FakeLib())
+        with pytest.raises(ValueError, match="datenart_version"):
+            client.validate_xml("<Elster></Elster>")
+
+    def test_validate_xml_passes_on_eric_ok(self, monkeypatch):
+        fake_lib = _FakeLib(check_ret=native_bindings.ERIC_OK)
+        client = _make_native_client(monkeypatch, fake_lib)
+
+        client.validate_xml("<Elster></Elster>", datenart_version="ESt_2024")  # must not raise
+
+        check_calls = [c for c in fake_lib.calls if c[0] == "check"]
+        assert check_calls == [("check", b"<Elster></Elster>", b"ESt_2024")]
+
+    def test_validate_xml_raises_with_eric_buffer_text_on_failure(self, monkeypatch):
+        fake_lib = _FakeLib(
+            check_ret=native_bindings.ERIC_GLOBAL_PRUEF_FEHLER,
+            check_text="Feld E0100001 fehlt".encode("utf-8"),
+        )
+        client = _make_native_client(monkeypatch, fake_lib)
+
+        with pytest.raises(EricValidationError, match="E0100001"):
+            client.validate_xml("<Elster></Elster>", datenart_version="ESt_2024")
+
+    def test_ericinitialisiere_runs_once_lazily_across_calls(self, monkeypatch):
+        fake_lib = _FakeLib()
+        client = _make_native_client(monkeypatch, fake_lib, plugin_path="C:/sdk/plugins")
+
+        client.validate_xml("<Elster></Elster>", datenart_version="ESt_2024")
+        client.validate_xml("<Elster></Elster>", datenart_version="ESt_2024")
+
+        init_calls = [c for c in fake_lib.calls if c[0] == "init"]
+        assert init_calls == [("init", b"C:/sdk/plugins", _FakeFFI.NULL)]
+
+    def test_ericinitialisiere_failure_raises_submission_error(self, monkeypatch):
+        fake_lib = _FakeLib(init_ret=610001001)
+        client = _make_native_client(monkeypatch, fake_lib)
+
+        with pytest.raises(EricSubmissionError, match="610001001"):
+            client.validate_xml("<Elster></Elster>", datenart_version="ESt_2024")
+
+    def test_submit_requires_datenart_version(self, monkeypatch):
+        client = _make_native_client(monkeypatch, _FakeLib())
+        with pytest.raises(ValueError, match="datenart_version"):
+            client.submit("<Elster></Elster>")
+
+    def test_submit_success_extracts_telenummer_and_sends_unauthenticated(self, monkeypatch):
+        fake_lib = _FakeLib(
+            submit_ret=native_bindings.ERIC_OK,
+            submit_rueckgabe=(
+                b'<EricBearbeiteVorgang xmlns="http://www.elster.de/EricXML/1.1/EricBearbeiteVorgang">'
+                b"<Erfolg><Telenummer>N55</Telenummer></Erfolg></EricBearbeiteVorgang>"
+            ),
+        )
+        client = _make_native_client(monkeypatch, fake_lib)
+
+        result = client.submit("<Elster></Elster>", datenart_version="ESt_2024")
+
+        assert result.accepted is True
+        assert result.transfer_ticket == "N55"
+
+        (_, xml, datenart_version, flags, druck_parameter, crypto_parameter) = next(
+            c for c in fake_lib.calls if c[0] == "submit"
+        )
+        assert xml == b"<Elster></Elster>"
+        assert datenart_version == b"ESt_2024"
+        assert flags == native_bindings.ERIC_VALIDIERE | native_bindings.ERIC_SENDE
+        # KOMPRIMIERT/unauthenticated: no print request, no crypto/cert parameter.
+        assert druck_parameter is _FakeFFI.NULL
+        assert crypto_parameter is _FakeFFI.NULL
+
+    def test_submit_pruef_fehler_raises_validation_error(self, monkeypatch):
+        fake_lib = _FakeLib(
+            submit_ret=native_bindings.ERIC_GLOBAL_PRUEF_FEHLER,
+            submit_rueckgabe=b"<EricBearbeiteVorgang><FehlerRegelpruefung /></EricBearbeiteVorgang>",
+        )
+        client = _make_native_client(monkeypatch, fake_lib)
+
+        with pytest.raises(EricValidationError, match="FehlerRegelpruefung"):
+            client.submit("<Elster></Elster>", datenart_version="ESt_2024")
+
+    def test_submit_other_failure_raises_submission_error_with_error_text(self, monkeypatch):
+        fake_lib = _FakeLib(submit_ret=999, error_text=b"transport failure")
+        client = _make_native_client(monkeypatch, fake_lib)
+
+        with pytest.raises(EricSubmissionError, match="transport failure"):
+            client.submit("<Elster></Elster>", datenart_version="ESt_2024")
+
+    def test_close_calls_eric_beende_only_if_initialized(self, monkeypatch):
+        fake_lib = _FakeLib()
+        client = _make_native_client(monkeypatch, fake_lib)
+
+        client.close()  # never initialized -- must not call EricBeende
+        assert ("beende",) not in fake_lib.calls
+
+        client.validate_xml("<Elster></Elster>", datenart_version="ESt_2024")
+        client.close()
+        assert ("beende",) in fake_lib.calls
+        assert client._initialized is False
+
+
+_REAL_SDK_PATH = os.environ.get("ERIC_SDK_PATH")
+
+
+@pytest.mark.skipif(
+    not _REAL_SDK_PATH,
+    reason="ERIC_SDK_PATH not set -- point it at an extracted ERiC SDK platform "
+    "directory to run this against the real proprietary library.",
+)
+class TestNativeEricClientAgainstRealLibrary:
+    """Opt-in integration test: proves native_bindings.py's cdef actually
+    matches the real ericapi.dll/.so ABI, not just a plausible-looking
+    guess. Verified manually against ERiC 44.2.4.1/Windows-x86_64: garbage
+    XML is rejected with a real German plausibility error, and the SDK's
+    own est_e10_2024.xml example passes EricCheckXML cleanly."""
+
+    def test_initialises_and_validates_against_real_library(self):
+        client = NativeEricClient(sdk_path=_REAL_SDK_PATH)
+        try:
+            with pytest.raises(EricValidationError):
+                client.validate_xml("<not>real</not>", datenart_version="ESt_2024")
+        finally:
+            client.close()
 
 
 class TestSubmitFiling:
