@@ -26,7 +26,8 @@ export default function AgbPage() {
         <p>
           Diese Allgemeinen Geschäftsbedingungen gelten für die Nutzung von TaxEngine.de,
           angeboten von {info.operatorName}, {info.street}, {info.postalCode} {info.city}{" "}
-          ("wir", "TaxEngine.de"), durch registrierte Nutzerinnen und Nutzer ("Sie").
+          (&bdquo;wir&ldquo;, &bdquo;TaxEngine.de&ldquo;), durch registrierte Nutzerinnen und Nutzer
+          (&bdquo;Sie&ldquo;).
           Abweichende Bedingungen des Nutzers werden nicht anerkannt, es sei denn, wir stimmen
           ihrer Geltung ausdrücklich schriftlich zu.
         </p>
@@ -80,10 +81,10 @@ export default function AgbPage() {
         </p>
         <p className="rounded-sm bg-paper-dim p-4 text-sm">
           Muster-Widerrufsformular (an {info.operatorName}, {info.street}, {info.postalCode}{" "}
-          {info.city}, {info.email}): "Hiermit widerrufe(n) ich/wir den von mir/uns
+          {info.city}, {info.email}): &bdquo;Hiermit widerrufe(n) ich/wir den von mir/uns
           abgeschlossenen Vertrag über die Erbringung der folgenden Dienstleistung: Übermittlung
           meiner/unserer Steuererklärung -- Bestellt am / erhalten am -- Name des/der
-          Verbraucher(s) -- Anschrift des/der Verbraucher(s) -- Datum."
+          Verbraucher(s) -- Anschrift des/der Verbraucher(s) -- Datum.&ldquo;
         </p>
       </LegalSection>
 

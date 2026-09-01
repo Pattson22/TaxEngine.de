@@ -30,6 +30,9 @@ reportlab==4.2.5           # komprimierte Steuererklärung cover sheet (see app/
 # --- ERiC (ELSTER Rich Client) native bridge ---
 cffi==1.17.1                # binds to the real ericapi.dll/.so, see app/eric/native_bindings.py
 
+# --- Error monitoring ---
+sentry-sdk==2.68.1          # see app/monitoring.py -- no-ops unless SENTRY_DSN is set
+
 # --- Testing ---
 pytest==8.3.3
 pytest-cov==5.0.0

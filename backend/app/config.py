@@ -65,5 +65,15 @@ class Settings(BaseSettings):
 
     environment: str = "development"
 
+    # Error monitoring (Sentry). Empty by default -- sentry_sdk.init()
+    # with a falsy dsn disables the SDK entirely (every capture call
+    # becomes a no-op), so this is safe to leave unset in dev/test/CI.
+    # See app/monitoring.py for why send_default_pii and
+    # max_request_body_size are hard-pinned rather than configurable:
+    # this app's request bodies routinely contain full tax/financial
+    # data, which must never leave the process on an error event.
+    sentry_dsn: str = ""
+    sentry_traces_sample_rate: float = 0.0
+
 
 settings = Settings()

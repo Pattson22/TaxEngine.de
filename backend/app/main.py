@@ -12,6 +12,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import api_router
 from app.config import settings
+from app.monitoring import init_sentry
+
+# Must run before the FastAPI app is constructed -- sentry_sdk's
+# integrations patch on init, so anything created before this point
+# (including `app` itself) wouldn't be instrumented.
+init_sentry()
 
 app = FastAPI(
     title="TaxEngine.de API",
