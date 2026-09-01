@@ -664,10 +664,14 @@ credential we control. Consequences:
   context-manager wrapping the handle open/close) instead of always
   `ffi.NULL`.
 - `xml_builder.py:336`: `Vorgang` becomes conditional on
-  `filing.submission_mode` instead of hardcoded `"send-NoSig"` — the
-  correct value for the authenticated path needs confirming against the
-  SDK's `ericdemo` sample / Entwicklerhandbuch (not guessed here; this is
-  the one remaining unconfirmed detail).
+  `filing.submission_mode` instead of hardcoded `"send-NoSig"`. The
+  authenticated value is confirmed as `"send-Auth"` — present verbatim in
+  every language variant of the SDK's own
+  `Beispiel/ericdemo-*/ESt_2020.xml` sample transfer XML (C++, C#,
+  Delphi, Java, Python all agree), the same data type this project
+  submits. `ericapi.h` itself only documents `vorgang` as "e.g.
+  'send-NoSig'" without enumerating the full set, so the sample XML is
+  the authoritative source here, not the header comment.
 - `submission_service.py`: routes AUTHENTIFIZIERT filings through the new
   crypto-parameter path; still never loads `ericapi.dll` outside the
   worker.
@@ -681,8 +685,8 @@ credential we control. Consequences:
 
 ### 7.4 Open questions before implementation starts
 
-- Exact `Vorgang` value ERiC expects for an authenticated send (needs the
-  Entwicklerhandbuch or `ericdemo-cpp` sample, not yet checked).
+- ~~Exact `Vorgang` value ERiC expects for an authenticated send~~ —
+  resolved: `"send-Auth"` (see §7.3).
 - Where/how the `.pfx` gets from the user's browser to the worker's
   filesystem without ever passing through the web process in plaintext.
 - Retention: does the encrypted cert get deleted after each submission

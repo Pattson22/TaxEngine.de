@@ -333,7 +333,11 @@ def build_est_xml(
     header = ET.SubElement(root, "TransferHeader", version=_HEADER_VERSION)
     ET.SubElement(header, "Verfahren").text = "ElsterErklaerung"
     ET.SubElement(header, "DatenArt").text = "ESt"
-    ET.SubElement(header, "Vorgang").text = "send-NoSig"  # unauthenticated -- see ELSTER_ERIC_INTEGRATION.md section 6
+    # unauthenticated (KOMPRIMIERT) -- see ELSTER_ERIC_INTEGRATION.md section 6.
+    # The authenticated equivalent is "send-Auth" (confirmed against the SDK's
+    # own Beispiel/ericdemo-*/ESt_2020.xml samples, section 7.4) -- not wired
+    # up yet since AUTHENTIFIZIERT mode has no cert/PIN plumbing behind it.
+    ET.SubElement(header, "Vorgang").text = "send-NoSig"
 
     ziel = _FEDERAL_STATE_TO_ZIEL.get(user.residence_state)
     if ziel:
