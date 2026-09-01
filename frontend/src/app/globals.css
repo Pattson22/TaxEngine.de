@@ -39,6 +39,18 @@
   --color-terracotta-soft: #d99a6c;
   --color-mauve: #8c4a6b;
   --color-mauve-soft: #c087a3;
+
+  /* The "Live Refund Anchor" -- a deliberately separate, deep-monochrome
+     palette used ONLY inside that one component (see
+     components/refund-anchor.tsx). Never a loud/neon green: abyss is a
+     near-black that still carries the brand's ink/navy undertone, and
+     alpine/alpine-warn are muted enough to read as premium rather than a
+     stock-ticker "number go up" green. The backdrop stays abyss
+     regardless of sign -- only the digit color communicates refund vs.
+     owed. */
+  --color-abyss: #0a0d16;
+  --color-alpine: #7fe0b3;
+  --color-alpine-warn: #e3a988;
 }
 
 body {

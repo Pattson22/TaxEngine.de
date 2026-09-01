@@ -48,7 +48,7 @@ export function Select({
 export function Label({ className = "", ...props }: LabelHTMLAttributes<HTMLLabelElement>) {
   return (
     <label
-      className={`mb-1.5 block text-[11px] font-medium tracking-[0.08em] text-ink/50 uppercase ${className}`}
+      className={`mb-2.5 block text-[11px] font-medium tracking-[0.08em] text-ink/50 uppercase ${className}`}
       {...props}
     />
   );
@@ -56,7 +56,7 @@ export function Label({ className = "", ...props }: LabelHTMLAttributes<HTMLLabe
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`border border-ink/10 bg-paper p-6 ${className}`}>{children}</div>
+    <div className={`rounded-2xl border border-ink/8 bg-paper p-8 ${className}`}>{children}</div>
   );
 }
 

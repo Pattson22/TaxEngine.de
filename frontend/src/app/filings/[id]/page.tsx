@@ -22,6 +22,8 @@ import { useRequireOnboarding } from "@/lib/use-require-auth";
 import { eurosToCents, formatCents } from "@/lib/money";
 import { Button, CategoryTab, Card, ErrorBanner, Eyebrow, Input, Label, StatusStamp } from "@/components/ui";
 import { Ledger, LedgerLine } from "@/components/ledger";
+import { RefundAnchor } from "@/components/refund-anchor";
+import { BentoGrid, BentoTile } from "@/components/bento";
 import type {
   CapitalIncomeStatement,
   Deduction,
@@ -216,11 +218,10 @@ export default function FilingDetailPage() {
     rentalIncome.length > 0 ||
     selfEmployment.length > 0;
   const isCalculated = filing.status !== "DRAFT";
-  const refundIsPositive = (filing.estimated_refund_cents ?? 0) >= 0;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-14">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="mx-auto max-w-6xl px-6 py-20 md:px-10 md:py-24">
+      <div className="mb-12 flex items-center justify-between">
         <div>
           <Eyebrow>Steuererklärung</Eyebrow>
           <h1 className="font-display text-[28px] leading-tight font-medium text-ink">
@@ -232,8 +233,13 @@ export default function FilingDetailPage() {
 
       {error && <ErrorBanner message={error} />}
 
-      <div className="space-y-10">
-        <section>
+      <div className="mb-12">
+        <RefundAnchor amountCents={filing.estimated_refund_cents} isCalculated={isCalculated} />
+      </div>
+
+      <div className="space-y-12">
+        <BentoGrid>
+        <BentoTile span={2}>
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <CategoryTab category="wage" />
@@ -245,7 +251,7 @@ export default function FilingDetailPage() {
               onClick={() => router.push(`/filings/${id}/wage-income`)}
               className="border-b border-brass/40 text-sm text-brass transition-colors hover:border-brass"
             >
-              + Add employer
+              + Add
             </button>
           </div>
           {wageCerts.length === 0 ? (
@@ -265,9 +271,9 @@ export default function FilingDetailPage() {
               <LedgerLine label="Total gross" value={formatCents(totalGrossWage)} tone="total" />
             </Ledger>
           )}
-        </section>
+        </BentoTile>
 
-        <section>
+        <BentoTile>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
               Deductions
@@ -295,9 +301,9 @@ export default function FilingDetailPage() {
               ))}
             </Ledger>
           )}
-        </section>
+        </BentoTile>
 
-        <section>
+        <BentoTile>
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <CategoryTab category="capital" />
@@ -329,9 +335,9 @@ export default function FilingDetailPage() {
               ))}
             </Ledger>
           )}
-        </section>
+        </BentoTile>
 
-        <section>
+        <BentoTile>
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <CategoryTab category="rental" />
@@ -343,7 +349,7 @@ export default function FilingDetailPage() {
               onClick={() => router.push(`/filings/${id}/rental-income`)}
               className="border-b border-sage/40 text-sm text-sage transition-colors hover:border-sage"
             >
-              + Add property
+              + Add
             </button>
           </div>
           {rentalIncome.length === 0 ? (
@@ -364,14 +370,14 @@ export default function FilingDetailPage() {
               })}
             </Ledger>
           )}
-        </section>
+        </BentoTile>
 
-        <section>
-          <div className="mb-3 flex items-center justify-between">
+        <BentoTile>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-y-1.5">
             <div className="flex items-center gap-2.5">
               <CategoryTab category="self_employment" />
               <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
-                Self-employment income
+                Self-employment
               </h2>
             </div>
             <button
@@ -399,12 +405,15 @@ export default function FilingDetailPage() {
               })}
             </Ledger>
           )}
-        </section>
+        </BentoTile>
 
-        <KinderfreibetragSection filing={filing} token={token} onUpdated={setFiling} />
+        <BentoTile>
+          <KinderfreibetragSection filing={filing} token={token} onUpdated={setFiling} />
+        </BentoTile>
+        </BentoGrid>
 
         <section>
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-4 flex items-center justify-between">
             <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
               Calculation
             </h2>
@@ -419,7 +428,7 @@ export default function FilingDetailPage() {
             </p>
           ) : (
             isCalculated && (
-              <Card className="border-ink/15">
+              <Card>
                 <Ledger className="border-none py-0">
                   {filing.net_rental_income_cents !== null && filing.net_rental_income_cents !== 0 && (
                     <LedgerLine
@@ -496,40 +505,29 @@ export default function FilingDetailPage() {
                     <LedgerLine label="Bereits einbehalten" value={formatCents(totalWithheldCents)} />
                   )}
                 </Ledger>
-                <div className="mt-2 flex items-baseline justify-between border-t border-ink/15 pt-4">
-                  <span className="font-display text-base font-medium text-ink">
-                    {refundIsPositive ? "Estimated refund" : "You'd owe"}
-                  </span>
-                  <span
-                    className={`tabular font-display text-2xl font-medium ${refundIsPositive ? "text-sage" : "text-clay"}`}
-                  >
-                    {formatCents(
-                      refundIsPositive
-                        ? filing.estimated_refund_cents
-                        : Math.abs(filing.estimated_refund_cents ?? 0),
-                    )}
-                  </span>
-                </div>
+                <p className="mt-4 text-xs text-ink/35">
+                  This is what produced the figure in your refund anchor above.
+                </p>
               </Card>
             )
           )}
         </section>
 
         {isCalculated && filing.status === "CALCULATED" && (
-          <section className="border border-brass/30 bg-brass-soft/15 p-6">
+          <section className="rounded-2xl border border-brass/25 bg-brass-soft/10 p-8">
             <h2 className="font-display text-base font-medium text-ink">Ready to file</h2>
-            <p className="mt-1.5 text-sm text-ink/60">
+            <p className="mt-2 text-sm text-ink/60">
               Pay the flat {formatCents(filing.processing_fee_cents)} fee and we&apos;ll submit
               this to the Finanzamt.
             </p>
-            <Button className="mt-4" onClick={() => router.push(`/filings/${id}/pay`)}>
+            <Button className="mt-5" onClick={() => router.push(`/filings/${id}/pay`)}>
               Continue to payment
             </Button>
           </section>
         )}
 
         {["FEE_PAID", "SUBMITTED", "ACCEPTED", "REJECTED"].includes(filing.status) && (
-          <section className="border-t border-ink/10 pt-6">
+          <section className="border-t border-ink/8 pt-8">
             <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
               Submission
             </h2>
@@ -579,22 +577,22 @@ export default function FilingDetailPage() {
         )}
 
         {filing.elster_transfer_ticket && filing.submission_mode === "KOMPRIMIERT" && (
-          <section className="border border-brass/30 bg-brass-soft/15 p-6">
+          <section className="rounded-2xl border border-brass/25 bg-brass-soft/10 p-8">
             <h2 className="font-display text-base font-medium text-ink">
               Finish by mail (komprimiert)
             </h2>
             {filing.cover_sheet_mailed_at ? (
-              <p className="mt-1.5 text-sm text-sage">
+              <p className="mt-2 text-sm text-sage">
                 Marked as mailed — your filing is complete once the Finanzamt receives it.
               </p>
             ) : (
               <>
-                <p className="mt-1.5 text-sm text-ink/60">
+                <p className="mt-2 text-sm text-ink/60">
                   This submission went out unauthenticated (no personal ELSTER certificate on
                   file yet), so it isn&apos;t legally binding until you print, sign, and mail the
                   cover sheet below to your Finanzamt.
                 </p>
-                <div className="mt-4 flex flex-wrap gap-3">
+                <div className="mt-5 flex flex-wrap gap-3">
                   <Button
                     variant="secondary"
                     onClick={handleDownloadCoverSheet}
@@ -651,7 +649,7 @@ function KinderfreibetragSection({
   }
 
   return (
-    <section>
+    <>
       <div className="mb-3 flex items-center gap-2.5">
         <CategoryTab category="children" />
         <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
@@ -694,6 +692,6 @@ function KinderfreibetragSection({
             : "Günstigerprüfung: keeping the Kindergeld you already received worked out better than the Kinderfreibetrag."}
         </p>
       )}
-    </section>
+    </>
   );
 }

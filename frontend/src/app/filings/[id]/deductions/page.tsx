@@ -6,7 +6,47 @@ import { createDeduction, getTaxFiling } from "@/lib/api";
 import { useRequireOnboarding } from "@/lib/use-require-auth";
 import { eurosToCents } from "@/lib/money";
 import { Button, Card, ErrorBanner, Eyebrow, Input, Label, PageHeading, Select } from "@/components/ui";
+import { InfoTrigger, SlideOver } from "@/components/slide-over";
 import type { DeductionCategory } from "@/lib/types";
+
+const LEGAL_EXPLANATIONS: Partial<Record<DeductionCategory, { title: string; body: string[] }>> = {
+  COMMUTE: {
+    title: "Entfernungspauschale",
+    body: [
+      "§9 Abs. 1 Satz 3 Nr. 4 EStG — the commuter allowance applies per working day, per one-way kilometer between home and your first place of work (erste Tätigkeitsstätte), regardless of how you actually travel.",
+      "€0.30 per kilometer for the first 20 km, then €0.38 for every kilometer beyond that.",
+      "The Finanzamt automatically compares this to your Arbeitnehmer-Pauschbetrag (€1,230) and uses whichever documented total is higher.",
+    ],
+  },
+  HOME_OFFICE: {
+    title: "Homeoffice-Pauschale",
+    body: [
+      "§4 Abs. 5 Satz 1 Nr. 6c EStG — a flat daily allowance for days worked mainly from home, no separate room or receipts required.",
+      "€6 per day, up to 210 days a year (a maximum of €1,260) — the post-2023 rate this project uses.",
+      "You can combine this with the commuter allowance on a different day, but not for the same calendar day.",
+    ],
+  },
+};
+
+function LabelWithInfo({
+  htmlFor,
+  children,
+  onInfoClick,
+}: {
+  htmlFor: string;
+  children: string;
+  onInfoClick: () => void;
+}) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className="mb-2.5 flex items-center text-[11px] font-medium tracking-[0.08em] text-ink/50 uppercase"
+    >
+      {children}
+      <InfoTrigger onClick={onInfoClick} label={`More about ${children}`} />
+    </label>
+  );
+}
 
 const CATEGORIES: { value: DeductionCategory; label: string }[] = [
   { value: "COMMUTE", label: "Commute (Entfernungspauschale)" },
@@ -39,6 +79,8 @@ export default function AddDeductionPage() {
   const [category, setCategory] = useState<DeductionCategory>("COMMUTE");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [openInfo, setOpenInfo] = useState<DeductionCategory | null>(null);
+  const activeExplanation = openInfo ? LEGAL_EXPLANATIONS[openInfo] : null;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,12 +111,12 @@ export default function AddDeductionPage() {
   if (authLoading || !token) return null;
 
   return (
-    <div className="mx-auto max-w-md px-6 py-14">
+    <div className="mx-auto max-w-md px-6 py-20">
       <Eyebrow>Werbungskosten & Sonderausgaben</Eyebrow>
       <PageHeading title="Add a deduction" />
       <Card>
         {error && <ErrorBanner message={error} />}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-8">
           <div>
             <Label htmlFor="category">Category</Label>
             <Select
@@ -90,7 +132,7 @@ export default function AddDeductionPage() {
             </Select>
           </div>
 
-          <CategoryFields category={category} />
+          <CategoryFields category={category} onInfoClick={setOpenInfo} />
 
           <div className="flex gap-3 pt-2">
             <Button type="submit" disabled={isSubmitting}>
@@ -102,17 +144,29 @@ export default function AddDeductionPage() {
           </div>
         </form>
       </Card>
+
+      <SlideOver open={openInfo !== null} onClose={() => setOpenInfo(null)} title={activeExplanation?.title ?? ""}>
+        {activeExplanation?.body.map((paragraph, i) => <p key={i}>{paragraph}</p>)}
+      </SlideOver>
     </div>
   );
 }
 
-function CategoryFields({ category }: { category: DeductionCategory }) {
+function CategoryFields({
+  category,
+  onInfoClick,
+}: {
+  category: DeductionCategory;
+  onInfoClick: (category: DeductionCategory) => void;
+}) {
   switch (category) {
     case "COMMUTE":
       return (
         <>
           <div>
-            <Label htmlFor="distance_km">One-way distance (km)</Label>
+            <LabelWithInfo htmlFor="distance_km" onInfoClick={() => onInfoClick("COMMUTE")}>
+              One-way distance (km)
+            </LabelWithInfo>
             <Input id="distance_km" name="distance_km" type="number" min="0" required />
           </div>
           <div>
@@ -124,7 +178,9 @@ function CategoryFields({ category }: { category: DeductionCategory }) {
     case "HOME_OFFICE":
       return (
         <div>
-          <Label htmlFor="days_claimed">Home office days</Label>
+          <LabelWithInfo htmlFor="days_claimed" onInfoClick={() => onInfoClick("HOME_OFFICE")}>
+            Home office days
+          </LabelWithInfo>
           <Input id="days_claimed" name="days_claimed" type="number" min="0" required />
         </div>
       );
