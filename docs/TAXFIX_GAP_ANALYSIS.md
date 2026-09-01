@@ -37,7 +37,7 @@ corrected here.) Sources: [Taxfix — costs at a glance](https://taxfix.de/en/co
 | Document OCR (auto-read Lohnsteuerbescheinigung) | ✅ | ❌ |
 | Multi-language UI | ✅ (English for expats) | ❌ — English only, no i18n |
 | Frontend forms for capital gains / rental / self-employment / Kinderfreibetrag | ✅ | ✅ — added `filings/[id]/{capital-income,rental-income,self-employment}` pages plus an inline Kinderfreibetrag form; previously these had working backend routes with no UI at all |
-| Filing creation restricted to actually-supported tax years | — (Taxfix supports 2022–2025 retroactively) | ✅ — `GET /tax-filings/supported-years` + a frontend year picker, though only 2024 has reviewed constants right now (see "What's still a real gap" below) |
+| Filing creation restricted to actually-supported tax years | — (Taxfix supports 2022–2025 retroactively) | ✅ — `GET /tax-filings/supported-years` + a frontend year picker; 2022/2023/2024 now all have reviewed constants (2025 still pending final BMF bracket coefficients) |
 
 ## What closed the gap
 
@@ -119,15 +119,22 @@ notes. A few highlights:
    still the largest remaining gap. OCR and ELSTER prefill in particular
    require infrastructure (an OCR service, a real ELSTER Belegabruf
    integration) this project doesn't have — not attempted here.
-2. **Retroactive filing for prior tax years** — Taxfix supports 2022–2025.
-   `SUPPORTED_TAX_YEARS` (`tax_engine/constants.py`) only has a reviewed
-   entry for 2024; the year-picker mechanism (`GET
-   /tax-filings/supported-years`) is built to extend cleanly, but adding
-   e.g. 2022/2023 constants requires sourcing and verifying that year's
-   exact Grundfreibetrag/bracket thresholds/Pauschbeträge against the
-   official BMF publication — deliberately not guessed at here, since
-   `constants.py`'s own docstring treats it as "a compliance artifact, not
-   just code."
+2. ~~**Retroactive filing for prior tax years**~~ — CLOSED. `2022` and
+   `2023` now have reviewed `TaxYearConstants` entries alongside `2024`
+   (`tax_engine/constants.py`), matching Taxfix's 2022–2025 range except
+   for 2025 itself (still pending final BMF bracket coefficients, see
+   `TAX_YEAR_2024`'s own docstring). Each figure was cross-checked against
+   lohn-info.de's published tariff tables plus multiple independent
+   secondary sources, not guessed at -- `constants.py`'s docstring still
+   treats this as "a compliance artifact, not just code," so re-verify
+   against the official BMF publication before relying on either year for
+   a real filing. Two real structural changes between years required
+   care, not just different numbers: 2022's Altersvorsorgeaufwendungen
+   were only 94% deductible (100% only from 2023), and 2022's Kindergeld
+   was tiered by child count rather than a flat per-child amount (this
+   project's `kindergeld_monthly_cents_per_child` constant turned out to
+   be unused by any actual calculation, so the tiering doesn't affect
+   correctness -- see that field's docstring).
 3. **A live `NativeEricClient` submission** — the client itself is real and
    verified against the actual ERiC library (`EricCheckXML()` passes
    cleanly for wage/capital/rental/self-employment/children income,

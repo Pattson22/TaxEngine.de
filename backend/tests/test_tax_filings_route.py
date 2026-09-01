@@ -47,21 +47,21 @@ def _owned_filing(tax_year: int) -> tuple[TaxFiling, User]:
 
 class TestCalculateFilingUnsupportedYear:
     def test_plain_value_error_becomes_422_not_500(self):
-        filing, user = _owned_filing(2023)
+        filing, user = _owned_filing(2021)
         db = MagicMock()
         db.get.return_value = filing
 
         with patch(
             "app.api.routes.tax_filings.calculate_tax_filing",
             side_effect=ValueError(
-                "No verified tax constants available for tax_year=2023. Supported years: [2024]."
+                "No verified tax constants available for tax_year=2021. Supported years: [2022, 2023, 2024]."
             ),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 calculate_filing(filing.id, current_user=user, db=db)
 
         assert exc_info.value.status_code == 422
-        assert "2023" in exc_info.value.detail
+        assert "2021" in exc_info.value.detail
         db.rollback.assert_called_once()
 
     def test_supported_year_is_unaffected(self):
@@ -85,10 +85,10 @@ class TestCreateTaxFilingUnsupportedYear:
         db = MagicMock()
 
         with pytest.raises(HTTPException) as exc_info:
-            create_tax_filing(TaxFilingCreate(tax_year=2023), current_user=user, db=db)
+            create_tax_filing(TaxFilingCreate(tax_year=2021), current_user=user, db=db)
 
         assert exc_info.value.status_code == 422
-        assert "2023" in exc_info.value.detail
+        assert "2021" in exc_info.value.detail
         db.add.assert_not_called()
         db.commit.assert_not_called()
 
@@ -107,7 +107,7 @@ class TestCreateTaxFilingUnsupportedYear:
 
 class TestListSupportedTaxYears:
     def test_returns_the_currently_reviewed_years(self):
-        assert list_supported_tax_years() == [2024]
+        assert list_supported_tax_years() == [2022, 2023, 2024]
 
 
 def _accepted_komprimiert_filing(**overrides) -> tuple[TaxFiling, User]:

@@ -154,9 +154,15 @@ class TaxYearConstants:
     kinderfreibetrag_total_per_child_joint_cents: int
     kinderfreibetrag_total_per_child_single_cents: int
 
-    # §66 EStG — Kindergeld, paid monthly by the Familienkasse. Not part of
-    # the tax return itself, but required as an input to the
-    # Günstigerprüfung's clawback calculation.
+    # §66 EStG — Kindergeld, paid monthly by the Familienkasse. NOT actually
+    # read by any calculation -- the Günstigerprüfung's clawback
+    # (kinderfreibetrag.py) uses tax_filings.kindergeld_received_cents, the
+    # filer's own reported actual total, not this constant. Kept purely as
+    # an illustrative reference value. Before 2023 this was tiered by child
+    # count (1st/2nd child, 3rd, 4th+ each had a different rate) rather
+    # than the flat per-child amount a single int can represent -- see
+    # TAX_YEAR_2022's value below for why it's only the first-two-children
+    # rate, not a full picture of that year's Kindergeld.
     kindergeld_monthly_cents_per_child: int
 
     # Kirchensteuer Kappung — each Land's Landeskirchensteuergesetz caps
@@ -174,6 +180,162 @@ class TaxYearConstants:
     # OVERSTATES a refund by assuming a cap the taxpayer may not actually
     # qualify for.
     kirchensteuer_kappung_rates: dict[FederalState, Decimal]
+
+
+# Kirchensteuer Kappung rates -- reused as-is across 2022/2023/2024 below.
+# Each Land's Kappung percentage is set by that Land's own
+# Kirchensteuergesetz and changes rarely (none of the three years above
+# have a documented change), but this has NOT been individually re-verified
+# per state per year -- treat a multi-year reuse like this the same as any
+# other unverified assumption in this file if a specific state/year is ever
+# disputed. See TaxYearConstants.kirchensteuer_kappung_rates's own
+# docstring for the per-denomination/Antrag-requirement simplifications
+# that apply regardless of year.
+_KIRCHENSTEUER_KAPPUNG_RATES = {
+    # BAYERN intentionally absent -- no Kappung available there.
+    FederalState.BADEN_WUERTTEMBERG: Decimal("0.035"),
+    FederalState.BERLIN: Decimal("0.035"),
+    FederalState.BRANDENBURG: Decimal("0.035"),
+    FederalState.BREMEN: Decimal("0.035"),
+    FederalState.HAMBURG: Decimal("0.035"),
+    FederalState.HESSEN: Decimal("0.040"),
+    FederalState.MECKLENBURG_VORPOMMERN: Decimal("0.035"),
+    FederalState.NIEDERSACHSEN: Decimal("0.035"),
+    FederalState.NORDRHEIN_WESTFALEN: Decimal("0.040"),
+    FederalState.RHEINLAND_PFALZ: Decimal("0.040"),
+    FederalState.SAARLAND: Decimal("0.040"),
+    FederalState.SACHSEN: Decimal("0.035"),
+    FederalState.SACHSEN_ANHALT: Decimal("0.035"),
+    FederalState.SCHLESWIG_HOLSTEIN: Decimal("0.035"),
+    FederalState.THUERINGEN: Decimal("0.035"),
+}
+
+# zumutbare Belastung (§33 Abs. 3 EStG, see
+# tax_engine/deductions/aussergewoehnliche_belastungen.py) -- the bracket
+# thresholds and rate table have been stable for many years; reused as-is
+# across 2022/2023/2024 below, same "not individually re-verified per
+# year" caveat as the Kappung rates above.
+_ZUMUTBARE_BELASTUNG_BRACKET_1_THRESHOLD_CENTS = 15_340_00
+_ZUMUTBARE_BELASTUNG_BRACKET_2_THRESHOLD_CENTS = 51_130_00
+_ZUMUTBARE_BELASTUNG_RATES_SINGLE_NO_CHILDREN = (Decimal("0.05"), Decimal("0.06"), Decimal("0.07"))
+_ZUMUTBARE_BELASTUNG_RATES_JOINT_NO_CHILDREN = (Decimal("0.04"), Decimal("0.05"), Decimal("0.06"))
+_ZUMUTBARE_BELASTUNG_RATES_ONE_OR_TWO_CHILDREN = (Decimal("0.02"), Decimal("0.03"), Decimal("0.04"))
+_ZUMUTBARE_BELASTUNG_RATES_THREE_PLUS_CHILDREN = (Decimal("0.01"), Decimal("0.01"), Decimal("0.02"))
+
+
+# -----------------------------------------------------------------------------
+# 2022 tax year. Sources cross-checked against lohn-info.de's published
+# tariff tables and multiple independent secondary sources (steuerring.de,
+# lohnsteuer-kompakt.de, finanztip.de) in 2026-09; re-verify against the
+# official BMF publication before relying on this for a real 2022 filing.
+# -----------------------------------------------------------------------------
+TAX_YEAR_2022 = TaxYearConstants(
+    tax_year=2022,
+    arbeitnehmer_pauschbetrag_cents=120_000,       # €1,200 (Steuerentlastungsgesetz 2022, retroactive)
+    grundfreibetrag_cents=10_347_00,               # €10,347
+    commute_rate_cents_per_km_first_20=30,          # €0.30/km
+    commute_rate_cents_per_km_beyond_20=38,         # €0.38/km (moved forward from a planned 2024 start date)
+    commute_rate_first_tier_km_threshold=20,
+    home_office_rate_cents_per_day=500,             # €5.00/day (pre-reform rule, last year in effect)
+    home_office_max_days_per_year=120,              # pre-reform cap (€600/year)
+    bracket_2_threshold_cents=14_926_00,            # €14,926
+    bracket_3_threshold_cents=58_596_00,            # €58,596
+    bracket_4_threshold_cents=277_825_00,           # €277,825
+    bracket_5_threshold_cents=277_825_00,           # 45% zone starts where 42% zone ends
+    soli_freigrenze_single_cents=16_956_00,         # €16,956 of assessed income tax (set for 2021, unchanged in 2022)
+    soli_freigrenze_joint_cents=33_912_00,          # €33,912 of assessed income tax
+    soli_rate=Decimal("0.055"),
+    soli_milderungszone_rate=Decimal("0.119"),
+    church_tax_rate_bavaria_bw=Decimal("0.08"),
+    church_tax_rate_other_states=Decimal("0.09"),
+    sonderausgaben_pauschbetrag_single_cents=3_600,  # €36
+    sonderausgaben_pauschbetrag_joint_cents=7_200,   # €72
+    # 94% -- the last year of the pre-2023 phase-in (60% in 2005, +2pp/year).
+    # The Jahressteuergesetz 2022 accelerated full 100% deductibility to
+    # start in 2023, not 2022 -- see TAX_YEAR_2023 below.
+    altersvorsorge_deductible_fraction=Decimal("0.94"),
+    altersvorsorge_hoechstbetrag_single_cents=25_639_00,  # €25,639
+    altersvorsorge_hoechstbetrag_joint_cents=51_278_00,   # €51,278 (exactly double)
+    sonstige_vorsorgeaufwendungen_hoechstbetrag_single_cents=190_000,  # €1,900 (unchanged since 2010)
+    sonstige_vorsorgeaufwendungen_hoechstbetrag_joint_cents=380_000,
+    zumutbare_belastung_bracket_1_threshold_cents=_ZUMUTBARE_BELASTUNG_BRACKET_1_THRESHOLD_CENTS,
+    zumutbare_belastung_bracket_2_threshold_cents=_ZUMUTBARE_BELASTUNG_BRACKET_2_THRESHOLD_CENTS,
+    zumutbare_belastung_rates_single_no_children=_ZUMUTBARE_BELASTUNG_RATES_SINGLE_NO_CHILDREN,
+    zumutbare_belastung_rates_joint_no_children=_ZUMUTBARE_BELASTUNG_RATES_JOINT_NO_CHILDREN,
+    zumutbare_belastung_rates_one_or_two_children=_ZUMUTBARE_BELASTUNG_RATES_ONE_OR_TWO_CHILDREN,
+    zumutbare_belastung_rates_three_plus_children=_ZUMUTBARE_BELASTUNG_RATES_THREE_PLUS_CHILDREN,
+    spenden_deduction_cap_percentage=Decimal("0.20"),
+    childcare_deductible_fraction=Decimal("0.6667"),  # 2/3, unchanged until 2025
+    childcare_max_deductible_cents_per_child=400_000,  # €4,000/child
+    handwerkerleistungen_credit_fraction=Decimal("0.20"),
+    handwerkerleistungen_max_credit_cents=120_000,   # €1,200/year, unchanged since 2009
+    sparer_pauschbetrag_single_cents=80_100,         # €801 (pre-2023 amount)
+    sparer_pauschbetrag_joint_cents=160_200,         # €1,602 (pre-2023 amount)
+    kapitalertragsteuer_rate=Decimal("0.25"),
+    kinderfreibetrag_total_per_child_joint_cents=854_800,   # €8,548 (€5,620 + €2,928 BEA)
+    kinderfreibetrag_total_per_child_single_cents=427_400,  # €4,274 (half of the joint amount)
+    # €219/month -- the 2022 rate for the 1st/2nd child ONLY. 2022's actual
+    # Kindergeld was tiered by child count (1st/2nd €219, 3rd €225, 4th+
+    # €250) -- see this field's docstring on TaxYearConstants for why that
+    # doesn't matter for calculation correctness (this constant is unused).
+    kindergeld_monthly_cents_per_child=21_900,
+    kirchensteuer_kappung_rates=_KIRCHENSTEUER_KAPPUNG_RATES,
+)
+
+
+# -----------------------------------------------------------------------------
+# 2023 tax year. Sources cross-checked against lohn-info.de's published
+# tariff tables and multiple independent secondary sources (steuerring.de,
+# lohnsteuer-kompakt.de, finanztip.de) in 2026-09; re-verify against the
+# official BMF publication before relying on this for a real 2023 filing.
+# -----------------------------------------------------------------------------
+TAX_YEAR_2023 = TaxYearConstants(
+    tax_year=2023,
+    arbeitnehmer_pauschbetrag_cents=123_000,       # €1,230 (same as 2024)
+    grundfreibetrag_cents=10_908_00,               # €10,908
+    commute_rate_cents_per_km_first_20=30,          # €0.30/km
+    commute_rate_cents_per_km_beyond_20=38,         # €0.38/km
+    commute_rate_first_tier_km_threshold=20,
+    home_office_rate_cents_per_day=600,             # €6.00/day (post-reform rule, same as 2024)
+    home_office_max_days_per_year=210,
+    bracket_2_threshold_cents=15_999_00,            # €15,999
+    bracket_3_threshold_cents=62_809_00,            # €62,809
+    bracket_4_threshold_cents=277_825_00,           # €277,825
+    bracket_5_threshold_cents=277_825_00,           # 45% zone starts where 42% zone ends
+    soli_freigrenze_single_cents=17_543_00,         # €17,543 of assessed income tax
+    soli_freigrenze_joint_cents=35_086_00,          # €35,086 of assessed income tax
+    soli_rate=Decimal("0.055"),
+    soli_milderungszone_rate=Decimal("0.119"),
+    church_tax_rate_bavaria_bw=Decimal("0.08"),
+    church_tax_rate_other_states=Decimal("0.09"),
+    sonderausgaben_pauschbetrag_single_cents=3_600,  # €36
+    sonderausgaben_pauschbetrag_joint_cents=7_200,   # €72
+    # 100% -- the Jahressteuergesetz 2022 accelerated full deductibility to
+    # start already in 2023 (originally scheduled for 2025).
+    altersvorsorge_deductible_fraction=Decimal("1.00"),
+    altersvorsorge_hoechstbetrag_single_cents=26_528_00,  # €26,528
+    altersvorsorge_hoechstbetrag_joint_cents=53_056_00,   # €53,056 (exactly double)
+    sonstige_vorsorgeaufwendungen_hoechstbetrag_single_cents=190_000,  # €1,900 (unchanged since 2010)
+    sonstige_vorsorgeaufwendungen_hoechstbetrag_joint_cents=380_000,
+    zumutbare_belastung_bracket_1_threshold_cents=_ZUMUTBARE_BELASTUNG_BRACKET_1_THRESHOLD_CENTS,
+    zumutbare_belastung_bracket_2_threshold_cents=_ZUMUTBARE_BELASTUNG_BRACKET_2_THRESHOLD_CENTS,
+    zumutbare_belastung_rates_single_no_children=_ZUMUTBARE_BELASTUNG_RATES_SINGLE_NO_CHILDREN,
+    zumutbare_belastung_rates_joint_no_children=_ZUMUTBARE_BELASTUNG_RATES_JOINT_NO_CHILDREN,
+    zumutbare_belastung_rates_one_or_two_children=_ZUMUTBARE_BELASTUNG_RATES_ONE_OR_TWO_CHILDREN,
+    zumutbare_belastung_rates_three_plus_children=_ZUMUTBARE_BELASTUNG_RATES_THREE_PLUS_CHILDREN,
+    spenden_deduction_cap_percentage=Decimal("0.20"),
+    childcare_deductible_fraction=Decimal("0.6667"),  # 2/3, unchanged until 2025
+    childcare_max_deductible_cents_per_child=400_000,  # €4,000/child
+    handwerkerleistungen_credit_fraction=Decimal("0.20"),
+    handwerkerleistungen_max_credit_cents=120_000,   # €1,200/year, unchanged since 2009
+    sparer_pauschbetrag_single_cents=100_000,        # €1,000 (raised from €801, same as 2024)
+    sparer_pauschbetrag_joint_cents=200_000,         # €2,000 (raised from €1,602, same as 2024)
+    kapitalertragsteuer_rate=Decimal("0.25"),
+    kinderfreibetrag_total_per_child_joint_cents=895_200,   # €8,952 (€6,024 + €2,928 BEA)
+    kinderfreibetrag_total_per_child_single_cents=447_600,  # €4,476 (half of the joint amount)
+    kindergeld_monthly_cents_per_child=25_000,       # €250/month (the Staffelung by child count ended in 2023)
+    kirchensteuer_kappung_rates=_KIRCHENSTEUER_KAPPUNG_RATES,
+)
 
 
 # -----------------------------------------------------------------------------
@@ -206,12 +368,12 @@ TAX_YEAR_2024 = TaxYearConstants(
     altersvorsorge_hoechstbetrag_joint_cents=55_130_00,   # €55,130 (exactly double)
     sonstige_vorsorgeaufwendungen_hoechstbetrag_single_cents=190_000,  # €1,900 (employee rate)
     sonstige_vorsorgeaufwendungen_hoechstbetrag_joint_cents=380_000,   # €3,800 (doubled)
-    zumutbare_belastung_bracket_1_threshold_cents=15_340_00,   # €15,340
-    zumutbare_belastung_bracket_2_threshold_cents=51_130_00,   # €51,130
-    zumutbare_belastung_rates_single_no_children=(Decimal("0.05"), Decimal("0.06"), Decimal("0.07")),
-    zumutbare_belastung_rates_joint_no_children=(Decimal("0.04"), Decimal("0.05"), Decimal("0.06")),
-    zumutbare_belastung_rates_one_or_two_children=(Decimal("0.02"), Decimal("0.03"), Decimal("0.04")),
-    zumutbare_belastung_rates_three_plus_children=(Decimal("0.01"), Decimal("0.01"), Decimal("0.02")),
+    zumutbare_belastung_bracket_1_threshold_cents=_ZUMUTBARE_BELASTUNG_BRACKET_1_THRESHOLD_CENTS,
+    zumutbare_belastung_bracket_2_threshold_cents=_ZUMUTBARE_BELASTUNG_BRACKET_2_THRESHOLD_CENTS,
+    zumutbare_belastung_rates_single_no_children=_ZUMUTBARE_BELASTUNG_RATES_SINGLE_NO_CHILDREN,
+    zumutbare_belastung_rates_joint_no_children=_ZUMUTBARE_BELASTUNG_RATES_JOINT_NO_CHILDREN,
+    zumutbare_belastung_rates_one_or_two_children=_ZUMUTBARE_BELASTUNG_RATES_ONE_OR_TWO_CHILDREN,
+    zumutbare_belastung_rates_three_plus_children=_ZUMUTBARE_BELASTUNG_RATES_THREE_PLUS_CHILDREN,
     spenden_deduction_cap_percentage=Decimal("0.20"),
     childcare_deductible_fraction=Decimal("0.6667"),  # 2/3, per 2024 law (raised to 80% from 2025)
     childcare_max_deductible_cents_per_child=400_000,  # €4,000/child (2024)
@@ -223,27 +385,12 @@ TAX_YEAR_2024 = TaxYearConstants(
     kinderfreibetrag_total_per_child_joint_cents=954_000,   # €9,540 (€6,612 + €2,928 BEA)
     kinderfreibetrag_total_per_child_single_cents=477_000,  # €4,770 (half of the joint amount)
     kindergeld_monthly_cents_per_child=25_000,       # €250/month
-    kirchensteuer_kappung_rates={
-        # BAYERN intentionally absent -- no Kappung available there.
-        FederalState.BADEN_WUERTTEMBERG: Decimal("0.035"),
-        FederalState.BERLIN: Decimal("0.035"),
-        FederalState.BRANDENBURG: Decimal("0.035"),
-        FederalState.BREMEN: Decimal("0.035"),
-        FederalState.HAMBURG: Decimal("0.035"),
-        FederalState.HESSEN: Decimal("0.040"),
-        FederalState.MECKLENBURG_VORPOMMERN: Decimal("0.035"),
-        FederalState.NIEDERSACHSEN: Decimal("0.035"),
-        FederalState.NORDRHEIN_WESTFALEN: Decimal("0.040"),
-        FederalState.RHEINLAND_PFALZ: Decimal("0.040"),
-        FederalState.SAARLAND: Decimal("0.040"),
-        FederalState.SACHSEN: Decimal("0.035"),
-        FederalState.SACHSEN_ANHALT: Decimal("0.035"),
-        FederalState.SCHLESWIG_HOLSTEIN: Decimal("0.035"),
-        FederalState.THUERINGEN: Decimal("0.035"),
-    },
+    kirchensteuer_kappung_rates=_KIRCHENSTEUER_KAPPUNG_RATES,
 )
 
 SUPPORTED_TAX_YEARS: dict[int, TaxYearConstants] = {
+    2022: TAX_YEAR_2022,
+    2023: TAX_YEAR_2023,
     2024: TAX_YEAR_2024,
 }
 
