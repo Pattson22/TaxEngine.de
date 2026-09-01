@@ -31,6 +31,13 @@ class DocumentStorage(ABC):
     def upload(self, key: str, data: bytes, content_type: str) -> None:
         """Uploads `data` under `key`. Raises DocumentStorageError on failure."""
 
+    @abstractmethod
+    def delete(self, key: str) -> None:
+        """Deletes the object at `key`. Used by app/retention/purge_expired_data.py
+        so an expired WageTaxCertificate's underlying file doesn't outlive its
+        database row -- silently succeeds if the key is already gone (S3's
+        delete_object is idempotent), never raises for a missing object."""
+
 
 class S3DocumentStorage(DocumentStorage):
     def __init__(self) -> None:
@@ -48,3 +55,9 @@ class S3DocumentStorage(DocumentStorage):
             self._client.put_object(Bucket=self._bucket, Key=key, Body=data, ContentType=content_type)
         except (BotoCoreError, ClientError) as exc:
             raise DocumentStorageError(f"Couldn't store the uploaded document: {exc}") from exc
+
+    def delete(self, key: str) -> None:
+        try:
+            self._client.delete_object(Bucket=self._bucket, Key=key)
+        except (BotoCoreError, ClientError) as exc:
+            raise DocumentStorageError(f"Couldn't delete the stored document: {exc}") from exc

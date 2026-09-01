@@ -147,10 +147,12 @@ export default function DatenschutzPage() {
 
       <LegalSection title="10. Speicherdauer">
         <p>
-          Kontodaten speichern wir, solange Ihr Konto besteht. Steuerrelevante Daten
-          unterliegen den gesetzlichen Aufbewahrungspflichten (u. a. § 147 AO); eine
-          automatisierte Löschung nach Fristablauf ist derzeit nicht implementiert und muss vor
-          dem Livegang technisch umgesetzt werden.
+          Kontodaten speichern wir, solange Ihr Konto besteht. Steuerrelevante Daten (Ihre
+          Steuererklärung sowie die zugehörigen Belege, Einkünfte und Abzüge eines Steuerjahres)
+          löschen wir automatisiert {info.dataRetentionYears} volle Kalenderjahre nach Ablauf des
+          jeweiligen Steuerjahres -- orientiert an den steuerlichen Verjährungsfristen
+          (§§ 169-171 sowie §§ 228-232 AO), bewusst am oberen Ende dieser Fristen, um Daten
+          nicht vorzeitig zu löschen, die das Finanzamt noch benötigen könnte.
         </p>
       </LegalSection>
 

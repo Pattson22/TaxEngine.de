@@ -26,6 +26,16 @@ export const LEGAL_INFO = {
   registerNumber: "[Registernummer -- nur bei Handelsregistereintrag]",
   vatId: "[USt-IdNr. -- falls vorhanden]",
   supervisoryAuthority: "[Zuständige Landesdatenschutzbehörde am Firmensitz]",
-  documentStorageProvider: "[S3-kompatibler Anbieter, z. B. Cloudflare R2 / AWS S3 -- Region angeben]",
-  hostingProvider: "[Hosting-/Datenbankanbieter -- Region angeben]",
+  // Real, verified technical facts (Railway project configuration) --
+  // unlike the placeholders above, these are not the operator's to fill
+  // in, so they're filled in here directly. hostingProvider being a
+  // US region is the reason section 9's Drittland/SCC clause in
+  // datenschutz/page.tsx is not merely hypothetical -- flagged, not
+  // silently left implicit.
+  documentStorageProvider: "Railway (Object Storage, Region: Amsterdam/EU)",
+  hostingProvider: "Railway (Region: San Francisco/USA)",
+  // See app/config.py's data_retention_years docstring (backend) for the
+  // legal basis and the caveat that this figure itself still needs a
+  // lawyer's confirmation, same as every placeholder above.
+  dataRetentionYears: 10,
 } as const;

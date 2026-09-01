@@ -64,6 +64,21 @@ class Settings(BaseSettings):
     # never silently succeeds.
     eric_hersteller_id: str = "00000_override_in_env_once_registered"
 
+    # How many full calendar years past a tax_year's end must elapse before
+    # that year's data is eligible for automated deletion (see
+    # app/retention/purge_expired_data.py). Deliberately conservative --
+    # set to the longer of the two statutory limitation periods the
+    # Datenschutzerklärung cites (Festsetzungsverjährung, §§169-171 AO, up
+    # to 10 years for cases of tax evasion; Zahlungsverjährung, §§228-232
+    # AO, 5 years) rather than the shorter 4-year standard case, since
+    # deleting a record the Finanzamt could still legitimately need is a
+    # worse failure than keeping one a few years longer than the minimum.
+    # The exact figure is a placeholder pending the same lawyer review the
+    # legal pages themselves still need (see components/legal.tsx's
+    # LegalDraftNotice) -- the mechanism below is real, this number is not
+    # yet legally confirmed.
+    data_retention_years: int = 10
+
     environment: str = "development"
 
     # Error monitoring (Sentry). Empty by default -- sentry_sdk.init()
