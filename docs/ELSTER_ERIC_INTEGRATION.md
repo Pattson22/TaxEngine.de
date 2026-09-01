@@ -778,7 +778,46 @@ briefly, to bridge that gap. It must never be persisted as plaintext.
    long-lived vendor keypair, not per-user, so rotation is rare and can
    be scoped when it's actually needed).
 
-### 7.6 Open questions before implementation starts
+### 7.6 Retention policy — decided
+
+Re-upload per submission attempt, deleted immediately after use, no
+persistent per-user certificate storage at all. This is the stricter of
+the two options weighed in the (now-resolved) open question below, and
+it's the consistent choice given everything else already decided in this
+section: the PIN is never stored past one use (§7.5), the `.pfx` never
+touches the web process (§7.4), and elsewhere in this project credentials
+are handled by minimizing what's kept, not by building a vault (the live
+Stripe key guard in `config.py`, declining to store Stripe/Railway
+secrets in this conversation, documents stored only as unread reference
+links). A taxpayer's signing certificate is more sensitive than any of
+those, so it gets at least the same treatment, not less.
+
+1. **No `elster_certificate` table, no column on `User`.** The
+   `.pfx` storage key lives only on the `EricSubmissionJob` row itself
+   (a new `certificate_storage_key` column, alongside `encrypted_pin`
+   from §7.5) — scoped to that one submission attempt, not the user's
+   account.
+2. **Deleted in the same cleanup step as the PIN and the temp file.**
+   `_process_job`'s `finally` (§7.1's handle close, §7.4's temp-file
+   unlink, §7.5's `encrypted_pin = NULL`) also deletes the S3 object at
+   `certificate_storage_key`, regardless of whether the submission
+   succeeded or failed. One job, one certificate lifetime.
+3. **Backstop TTL on the bucket itself** (S3 lifecycle rule on
+   `elster-certificates/`, e.g. 48 hours) in case a job is never claimed
+   at all — worker down, crashed before reaching the `finally`, etc. —
+   so exposure is bounded even in a failure mode the application-level
+   cleanup doesn't reach.
+4. **User consequence**: re-attaching the `.pfx` on every submission,
+   including a later amendment. Accepted deliberately — filing (and
+   re-filing) is an infrequent, annual-cadence action, so this is a
+   small recurring friction in exchange for never having a standing
+   store of taxpayers' signing keys to worry about. It also sidesteps
+   two problems a persistent store would create: a "manage/delete my
+   stored certificate" account-settings surface that doesn't otherwise
+   need to exist, and the risk of holding a certificate past its own
+   ElsterOnline-side validity/revocation without any way to know.
+
+### 7.7 Open questions before implementation starts
 
 - ~~Exact `Vorgang` value ERiC expects for an authenticated send~~ —
   resolved: `"send-Auth"` (see §7.3).
@@ -789,8 +828,11 @@ briefly, to bridge that gap. It must never be persisted as plaintext.
   without being persisted in plaintext anywhere in between~~ —
   resolved: RSA-OAEP envelope encryption into `eric_submission_jobs`,
   decrypted worker-side only (see §7.5).
-- Retention: does the encrypted cert get deleted after each submission
-  (re-upload every time) or kept for repeat filers? Re-upload-per-filing
-  is simpler and reduces the sensitive-data footprint but is worse UX.
+- ~~Retention: does the encrypted cert get deleted after each submission
+  or kept for repeat filers?~~ — resolved: deleted after each submission
+  attempt, no persistent store (see §7.6).
 - Legal/compliance review of storing a taxpayer's signing certificate at
-  all, independent of the technical implementation.
+  all, even transiently, independent of the technical implementation.
+  This is the one item in this section that isn't a technical decision —
+  it needs an actual answer from you (or counsel) before writing any of
+  the code in §7.3, not more scoping.
