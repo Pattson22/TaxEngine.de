@@ -269,6 +269,30 @@ natural default of the unchanged status machine (recalculating requires
 re-paying to reach FEE_PAID again) rather than specially cased either
 way -- revisit if that's not the intended pricing.
 
+**Eleventh update**: the real HerstellerID has arrived --
+**`04505`**, assigned to the product name "TaxEngine.de" specifically
+(confirmed via `statistikauswertung@elster.de` on 2026-09-01; the
+ÜbermittlungsId from the Eighth update was `b064de96-e903-439b-a82d-b7d6f92fddbb`).
+Set in the local `.env` as `ERIC_HERSTELLER_ID=04505` (never committed --
+see `.env.example` for the template) and read by
+`app/config.py`'s `eric_hersteller_id` setting, which
+`xml_builder.build_est_xml()` already threads into every `TransferHeader`
+it builds. Per the approval email, a HerstellerID is bound to this exact
+product name, not to the company -- a differently-named product would
+need its own separate application.
+
+This closes the LAST missing piece from the Ninth update's async
+submission wiring, EXCEPT one: `app/eric_submitter/worker.py` still
+needs a real `ERIC_SDK_PATH` pointing at the extracted SDK before it can
+actually start (`run_forever()` raises otherwise) -- the SDK itself has
+been on disk since the Third/Fourth updates, just never wired into a
+running worker process. Once that's set and the worker is started
+alongside the API, a filer clicking "Submit to the Finanzamt" reaches a
+real `EricBearbeiteVorgang()` call for the first time this project has
+ever made outside of manual SDK-example testing -- worth treating that
+first real attempt with real care (a small, low-stakes filing, reviewed
+XML, someone watching the worker's logs), not as a routine deploy.
+
 **Correction to an earlier version of this doc**: obtaining the ERiC
 library itself is a *free developer registration* at
 elster.de/eportal/infoseite/entwickler, reviewed by the Bayerisches
