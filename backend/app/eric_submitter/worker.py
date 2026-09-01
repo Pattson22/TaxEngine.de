@@ -91,7 +91,15 @@ def _process_job(db: Session, eric_client: NativeEricClient, job: EricSubmission
 
     # Idempotency: never re-submit a filing that already has a real
     # Transferticket -- see docs/ELSTER_ERIC_INTEGRATION.md section 5.
-    if filing.elster_transfer_ticket:
+    # Amendment jobs (job.is_amendment, set at enqueue time -- see
+    # submission_service.enqueue_submission) are the deliberate exception:
+    # by the time an amendment job is claimed, calculate_tax_filing has
+    # already cleared filing.elster_transfer_ticket back to None (a fresh
+    # recalculation always precedes a resubmission), so in practice this
+    # branch only ever fires for a genuine accidental duplicate -- the
+    # is_amendment check is a second, explicit guard against ever treating
+    # a real prior success as an accident.
+    if filing.elster_transfer_ticket and not job.is_amendment:
         _succeed(db, job, filing.elster_transfer_ticket)
         return
 

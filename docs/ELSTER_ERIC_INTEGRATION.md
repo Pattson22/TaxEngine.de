@@ -216,6 +216,59 @@ of `app/eric_submitter/worker.py` and giving each filer a way to enter
 their Finanzamt BuFa-Nummer (the field already exists on `User`, just no
 frontend form yet).
 
+**Tenth update**: amended-return support (Berichtigte Steuererklärung).
+A real, verified finding first: the E10 (ESt) Datenart has NO "corrected
+declaration" checkbox at all -- confirmed by grepping the actual
+`E10-2024.xsd` for every plausible field name and finding nothing, then
+finding the real thing (`E3000601`, a `Ja1BaseCType` field inside a
+`Ber_Erkl_...CType` complex type, documented literally as "Berichtigte
+Steuererklärung") only in the USt (VAT) schema, `E50-2024.xsd`. So for
+income tax specifically, marking a submission as a correction is purely
+this project's own bookkeeping -- nothing about it is transmitted in the
+XML, which simplified this feature a lot.
+
+The mechanics: `tax_calculation_service.calculate_tax_filing()` now
+clears `elster_transfer_ticket`/`elster_submitted_at`/`elster_accepted_at`/
+`elster_rejection_reason` back to `NULL` whenever it recalculates a
+filing that was already `SUBMITTED`/`ACCEPTED`/`REJECTED` -- the filer
+editing income/deductions and clicking Recalculate IS what starts an
+amendment, since this project's income/deduction rows are keyed to
+`(user_id, tax_year)`, not to a specific `TaxFiling` row (an early design
+constraint discovered while scoping this feature, which is also why
+amendments reuse the SAME `TaxFiling` row rather than creating a linked
+new one). Clearing those fields flips the filing back through
+`CALCULATED` -> (pay again) -> `FEE_PAID` using the EXISTING status
+machine unchanged -- no new `FilingStatus` value was needed.
+`EricSubmissionJob` gained one column, `is_amendment`, set once at
+enqueue time by checking whether a SUCCEEDED job already exists for that
+filing_id (not by checking `elster_transfer_ticket`, which is already
+NULL by the time an amendment is enqueued). The worker's idempotency
+check (`_process_job`) now reads `filing.elster_transfer_ticket and not
+job.is_amendment` instead of just the ticket, so a genuine amendment
+isn't mistaken for an accidental duplicate of the original. The full
+history of every attempt (original and every amendment) is permanently
+queryable via the new `GET /tax-filings/{id}/submission-jobs` (plural),
+since the `TaxFiling` row itself only ever reflects the CURRENT attempt.
+
+Verified against the real Postgres DB (not just unit tests): staged a
+filing as ACCEPTED with a real-shaped ticket and a SUCCEEDED job,
+recalculated it (confirmed the stale fields cleared and status returned
+to CALCULATED), re-enqueued (confirmed `is_amendment=True` via the prior
+job history), and confirmed the full two-job history came back correctly
+ordered and flagged via the live API. The frontend
+(`filings/[id]/page.tsx`) shows a "Submission history" list once more
+than one job exists, and adjusts the ready-to-submit copy to say
+"amended return" when a prior submission succeeded.
+
+Deliberately NOT done: Einspruch (formal objection to an assessment) is
+a different legal mechanism with its own XML/deadline logic and depends
+on Bescheiddatenabruf existing first (there is no assessment to object
+to yet) -- out of scope here, same blocker as Bescheiddatenabruf itself.
+Whether an amendment should cost a second €34,90 fee was left as the
+natural default of the unchanged status machine (recalculating requires
+re-paying to reach FEE_PAID again) rather than specially cased either
+way -- revisit if that's not the intended pricing.
+
 **Correction to an earlier version of this doc**: obtaining the ERiC
 library itself is a *free developer registration* at
 elster.de/eportal/infoseite/entwickler, reviewed by the Bayerisches

@@ -134,8 +134,31 @@ def enqueue_submission(db: Session, filing: TaxFiling) -> EricSubmissionJob:
     FastAPI app. Does not itself validate `filing`'s status -- the calling
     route (`tax_filings.submit_tax_filing`) checks FEE_PAID/Steuer-ID for
     fast feedback, and the worker re-checks both itself right before it
-    actually submits, since a queued job can sit for a while."""
-    job = EricSubmissionJob(tax_filing_id=filing.id, status=EricSubmissionJobStatus.PENDING)
+    actually submits, since a queued job can sit for a while.
+
+    `is_amendment` is set here, once, from whether a PRIOR job for this
+    same filing already SUCCEEDED -- not from `filing.elster_transfer_ticket`
+    itself, which `tax_calculation_service.calculate_tax_filing` clears
+    back to None as soon as an already-submitted filing gets recalculated
+    (see that function's docstring), specifically so a NEW submission
+    cycle can start. The job history in `eric_submission_jobs` is the
+    permanent record `enqueue_submission` reads instead -- see
+    `EricSubmissionJob.is_amendment`'s docstring for why the worker needs
+    this decided up front rather than inferred later."""
+    had_prior_success = (
+        db.query(EricSubmissionJob)
+        .filter(
+            EricSubmissionJob.tax_filing_id == filing.id,
+            EricSubmissionJob.status == EricSubmissionJobStatus.SUCCEEDED,
+        )
+        .first()
+        is not None
+    )
+    job = EricSubmissionJob(
+        tax_filing_id=filing.id,
+        status=EricSubmissionJobStatus.PENDING,
+        is_amendment=had_prior_success,
+    )
     db.add(job)
     db.commit()
     db.refresh(job)

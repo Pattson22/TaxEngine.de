@@ -55,6 +55,7 @@ export interface EricSubmissionJob {
   id: string;
   tax_filing_id: string;
   status: EricSubmissionJobStatus;
+  is_amendment: boolean;
   error_message: string | null;
   transfer_ticket: string | null;
   claimed_at: string | null;

@@ -100,6 +100,31 @@ class TestProcessJob:
         assert job.status == EricSubmissionJobStatus.SUCCEEDED
         assert job.transfer_ticket == "EXISTING-TICKET"
 
+    def test_amendment_job_resubmits_even_with_an_existing_ticket(self):
+        # calculate_tax_filing clears elster_transfer_ticket before an
+        # amendment is enqueued (see tax_calculation_service.py), so in
+        # practice this filing wouldn't have one at claim time -- but the
+        # is_amendment flag is what actually governs the idempotency
+        # check, so this proves the guard doesn't ALSO depend on the
+        # ticket being absent.
+        filing = _make_filing(status=FilingStatus.FEE_PAID)
+        filing.elster_transfer_ticket = "STALE-TICKET"
+        user = _make_user()
+        db = self._db_for(filing, user)
+        job = _make_job(filing.id, is_amendment=True)
+
+        eric_client = MagicMock()
+        eric_client.format_steuernummer_for_elster.return_value = "9181081508155"
+        eric_client.validate_xml.return_value = None
+        eric_client.submit.return_value = EricSubmissionResult(transfer_ticket="AMENDED-TICKET", accepted=True)
+
+        _process_job(db, eric_client, job)
+
+        eric_client.submit.assert_called_once()
+        assert job.status == EricSubmissionJobStatus.SUCCEEDED
+        assert job.transfer_ticket == "AMENDED-TICKET"
+        assert filing.elster_transfer_ticket == "AMENDED-TICKET"
+
     def test_filing_not_fee_paid_fails_job(self):
         filing = _make_filing(status=FilingStatus.DRAFT)
         user = _make_user()

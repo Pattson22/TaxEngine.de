@@ -14,6 +14,7 @@ class EricSubmissionJobRead(BaseModel):
     id: uuid.UUID
     tax_filing_id: uuid.UUID
     status: EricSubmissionJobStatus
+    is_amendment: bool
     error_message: str | None
     transfer_ticket: str | None
     claimed_at: datetime | None

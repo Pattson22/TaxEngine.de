@@ -27,6 +27,7 @@ from app.eric.xml_builder import _cents_to_euro_str, _cents_to_whole_euro_str, b
 from app.models.capital_income_statement import CapitalIncomeStatement
 from app.models.child import Child
 from app.models.deduction import Deduction
+from app.models.eric_submission_job import EricSubmissionJob
 from app.models.enums import (
     ChildRelationshipType,
     ChurchTaxType,
@@ -952,6 +953,7 @@ class TestEnqueueSubmission:
 
     def test_creates_pending_job_for_the_filing(self):
         db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
         filing = _make_filing()
 
         job = enqueue_submission(db, filing)
@@ -960,3 +962,24 @@ class TestEnqueueSubmission:
         assert job.status == EricSubmissionJobStatus.PENDING
         db.add.assert_called_once()
         db.commit.assert_called_once()
+
+    def test_first_ever_submission_is_not_an_amendment(self):
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+        filing = _make_filing()
+
+        job = enqueue_submission(db, filing)
+
+        assert job.is_amendment is False
+
+    def test_resubmission_after_a_prior_success_is_an_amendment(self):
+        db = MagicMock()
+        # Simulate a prior SUCCEEDED job existing for this filing.
+        db.query.return_value.filter.return_value.first.return_value = MagicMock(
+            spec=EricSubmissionJob
+        )
+        filing = _make_filing()
+
+        job = enqueue_submission(db, filing)
+
+        assert job.is_amendment is True

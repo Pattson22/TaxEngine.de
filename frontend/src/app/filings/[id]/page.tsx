@@ -12,6 +12,7 @@ import {
   listDeductions,
   listRentalPropertyStatements,
   listSelfEmploymentStatements,
+  listSubmissionJobs,
   listWageTaxCertificates,
   markCoverSheetMailed,
   submitTaxFiling,
@@ -48,6 +49,7 @@ export default function FilingDetailPage() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionJob, setSubmissionJob] = useState<EricSubmissionJob | null>(null);
+  const [submissionHistory, setSubmissionHistory] = useState<EricSubmissionJob[]>([]);
   const [isDownloadingCoverSheet, setIsDownloadingCoverSheet] = useState(false);
   const [isMarkingMailed, setIsMarkingMailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,18 +71,20 @@ export default function FilingDetailPage() {
     if (!token) return;
     const loadedFiling = await getTaxFiling(token, id);
     setFiling(loadedFiling);
-    const [certs, deds, capital, rental, selfEmp] = await Promise.all([
+    const [certs, deds, capital, rental, selfEmp, jobs] = await Promise.all([
       listWageTaxCertificates(token, loadedFiling.tax_year) as Promise<WageTaxCertificate[]>,
       listDeductions(token, loadedFiling.tax_year),
       listCapitalIncomeStatements(token, loadedFiling.tax_year),
       listRentalPropertyStatements(token, loadedFiling.tax_year),
       listSelfEmploymentStatements(token, loadedFiling.tax_year),
+      listSubmissionJobs(token, id),
     ]);
     setWageCerts(certs);
     setDeductions(deds);
     setCapitalIncome(capital);
     setRentalIncome(rental);
     setSelfEmployment(selfEmp);
+    setSubmissionHistory(jobs);
   }, [token, id]);
 
   useEffect(() => {
@@ -125,6 +129,9 @@ export default function FilingDetailPage() {
         job = await getSubmissionJob(token, id);
         if (isMountedRef.current) setSubmissionJob(job);
       }
+
+      const jobs = await listSubmissionJobs(token, id);
+      if (isMountedRef.current) setSubmissionHistory(jobs);
 
       if (job.status === "SUCCEEDED") {
         const updated = await getTaxFiling(token, id);
@@ -543,11 +550,29 @@ export default function FilingDetailPage() {
                     ? "The eric-submitter worker is processing this now…"
                     : submissionJob?.status === "PENDING"
                       ? "Queued — waiting for the eric-submitter worker to pick this up…"
-                      : "Fee paid — ready to submit."}
+                      : submissionHistory.some((job) => job.status === "SUCCEEDED")
+                        ? "Fee paid — ready to submit your amended return."
+                        : "Fee paid — ready to submit."}
                 </p>
                 <Button className="mt-3" onClick={handleSubmit} disabled={isSubmitting}>
                   {isSubmitting ? "Submitting…" : "Submit to the Finanzamt"}
                 </Button>
+              </div>
+            )}
+            {submissionHistory.length > 1 && (
+              <div className="mt-5 border-t border-ink/10 pt-4">
+                <h3 className="text-xs font-medium tracking-wide text-ink/50 uppercase">
+                  Submission history
+                </h3>
+                <ul className="mt-2 space-y-1.5 text-sm text-ink/60">
+                  {submissionHistory.map((job) => (
+                    <li key={job.id} className="tabular">
+                      {job.is_amendment ? "Amendment" : "Original"} — {job.status}
+                      {job.transfer_ticket ? ` — ${job.transfer_ticket}` : ""}
+                      {job.error_message ? ` — ${job.error_message}` : ""}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </section>

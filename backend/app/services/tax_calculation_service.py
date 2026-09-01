@@ -122,6 +122,22 @@ def calculate_tax_filing(db: Session, user: User, tax_year: int) -> TaxFiling:
         filing = TaxFiling(user_id=user.id, tax_year=tax_year)
         db.add(filing)
         db.flush()  # assigns filing.id / defaults so number_of_children etc. are readable below
+    elif filing.status in (FilingStatus.SUBMITTED, FilingStatus.ACCEPTED, FilingStatus.REJECTED):
+        # Amended return, starting here: recalculating a filing that was
+        # already submitted means the filer is correcting something and
+        # will need to resubmit -- see docs/ELSTER_ERIC_INTEGRATION.md's
+        # amendment section for the full design. Clear the stale
+        # submission-outcome fields so the frontend's "already submitted"
+        # UI doesn't keep showing the OLD Transferticket/acceptance once
+        # this filing is ready for a genuinely new one; the full history
+        # of every past attempt (including this one) survives regardless
+        # in eric_submission_jobs, queryable via GET
+        # /tax-filings/{id}/submission-jobs. enqueue_submission() checks
+        # that job history (not these fields) to decide is_amendment.
+        filing.elster_transfer_ticket = None
+        filing.elster_submitted_at = None
+        filing.elster_accepted_at = None
+        filing.elster_rejection_reason = None
 
     wage_certs = (
         db.query(WageTaxCertificate)

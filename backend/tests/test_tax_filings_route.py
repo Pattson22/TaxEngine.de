@@ -28,6 +28,7 @@ from app.api.routes.tax_filings import (
     create_tax_filing,
     get_cover_sheet,
     get_submission_job,
+    list_submission_jobs,
     list_supported_tax_years,
     mark_cover_sheet_mailed,
     submit_tax_filing,
@@ -281,3 +282,40 @@ class TestGetSubmissionJob:
         result = get_submission_job(filing.id, current_user=user, db=db)
 
         assert result is job
+
+
+class TestListSubmissionJobs:
+    def test_empty_when_nothing_queued_yet(self):
+        filing, user = _fee_paid_filing()
+        db = MagicMock()
+        db.get.return_value = filing
+        db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+
+        result = list_submission_jobs(filing.id, current_user=user, db=db)
+
+        assert result == []
+
+    def test_returns_every_job_newest_first(self):
+        filing, user = _fee_paid_filing()
+        original = EricSubmissionJob(
+            tax_filing_id=filing.id,
+            status=EricSubmissionJobStatus.SUCCEEDED,
+            transfer_ticket="TICKET-1",
+            is_amendment=False,
+        )
+        amendment = EricSubmissionJob(
+            tax_filing_id=filing.id,
+            status=EricSubmissionJobStatus.SUCCEEDED,
+            transfer_ticket="TICKET-2",
+            is_amendment=True,
+        )
+        db = MagicMock()
+        db.get.return_value = filing
+        db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+            amendment,
+            original,
+        ]
+
+        result = list_submission_jobs(filing.id, current_user=user, db=db)
+
+        assert result == [amendment, original]

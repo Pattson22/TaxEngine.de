@@ -241,6 +241,29 @@ def get_submission_job(
     return job
 
 
+@router.get("/{filing_id}/submission-jobs", response_model=list[EricSubmissionJobRead])
+def list_submission_jobs(
+    filing_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[EricSubmissionJob]:
+    """Every submission attempt ever queued for this filing, newest first
+    -- the permanent audit trail an amendment relies on, since
+    `TaxFiling.elster_transfer_ticket` etc. only ever reflect the CURRENT
+    attempt (calculate_tax_filing clears them when a submitted filing gets
+    recalculated for an amendment -- see that function's docstring). Each
+    job's own `is_amendment` flag distinguishes the original submission
+    from any later corrections."""
+    filing = _get_owned_filing_or_404(filing_id, current_user, db)
+
+    return (
+        db.query(EricSubmissionJob)
+        .filter(EricSubmissionJob.tax_filing_id == filing.id)
+        .order_by(EricSubmissionJob.created_at.desc())
+        .all()
+    )
+
+
 @router.get("/{filing_id}/cover-sheet")
 def get_cover_sheet(
     filing_id: uuid.UUID,

@@ -165,6 +165,10 @@ export function getSubmissionJob(token: string, filingId: string): Promise<EricS
   return request<EricSubmissionJob>(`/tax-filings/${filingId}/submission-job`, { token });
 }
 
+export function listSubmissionJobs(token: string, filingId: string): Promise<EricSubmissionJob[]> {
+  return request<EricSubmissionJob[]>(`/tax-filings/${filingId}/submission-jobs`, { token });
+}
+
 // Binary PDF response -- can't go through request()'s JSON-only parsing.
 export async function downloadCoverSheet(token: string, filingId: string): Promise<Blob> {
   const response = await fetch(`${API_BASE_URL}/tax-filings/${filingId}/cover-sheet`, {
