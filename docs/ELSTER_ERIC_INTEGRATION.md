@@ -731,16 +731,64 @@ worker) — that's a separate, still-open question below, since a PIN is
 small text with a different threat model (needs per-submission
 encryption/immediate-discard, not object storage).
 
-### 7.5 Open questions before implementation starts
+### 7.5 The PIN transfer path — decided
+
+Envelope encryption into a new column on `eric_submission_jobs`, decrypted
+only inside the worker at the moment of use. The PIN has a different
+shape than the `.pfx` (a few characters, not a file), and the submission
+flow is asynchronous by design (`POST /submit` enqueues a
+`EricSubmissionJob` row; the worker polls and claims it later via
+`SELECT ... FOR UPDATE SKIP LOCKED` in `worker.py`'s `_claim_next_job`) —
+so unlike the `.pfx`, the PIN genuinely has to be *persisted*, if only
+briefly, to bridge that gap. It must never be persisted as plaintext.
+
+1. **One RSA keypair** (RSA-3072 + OAEP/SHA-256 — chosen because
+   `cryptography` is already a transitive dependency via
+   `python-jose[cryptography]` in `requirements.txt`, so this needs no
+   new library, and OAEP alone comfortably fits a PIN-length payload
+   without needing a hybrid AES scheme). The public key is not secret —
+   it goes in a normal setting available to the web process (e.g.
+   `ELSTER_PIN_PUBLIC_KEY` in `config.py`). The private key goes
+   *only* in `backend/.env.worker.local`, never in the web process's
+   environment at all — the same isolation already applied to
+   `ERIC_SDK_PATH`/`ERIC_HERSTELLER_ID`.
+2. **Web process, in the submit request handler**: encrypts the
+   submitted PIN with the public key immediately, writes only the
+   resulting ciphertext (base64) into a new nullable
+   `eric_submission_jobs.encrypted_pin` column via
+   `submission_service.enqueue_submission()`, and never logs, stores, or
+   otherwise retains the plaintext PIN beyond that local variable's
+   lifetime in the request.
+3. **Worker, in `_process_job`**: decrypts `encrypted_pin` with the
+   private key right before building the
+   `eric_verschluesselungs_parameter_t` struct for this one job's
+   `EricBearbeiteVorgang` call, uses it, and — in the same `finally`
+   that already needs to run for `.pfx` temp-file cleanup (§7.4) and
+   `EricCloseHandleToCertificate` (§7.1) — overwrites the local
+   plaintext variable and sets `encrypted_pin = NULL` on the job row
+   regardless of outcome, so ciphertext never outlives one use even
+   though it was never plaintext at rest to begin with.
+4. This only covers PIN-at-rest between enqueue and claim. Transport
+   from browser to web process is already covered by HTTPS/TLS (same as
+   every other field in that request, e.g. the withdrawal-consent
+   checkbox); this design doesn't add anything there because nothing
+   more is needed there.
+5. Not decided here, deliberately out of scope for this pass: key
+   rotation policy for the RSA keypair itself (this is a single
+   long-lived vendor keypair, not per-user, so rotation is rare and can
+   be scoped when it's actually needed).
+
+### 7.6 Open questions before implementation starts
 
 - ~~Exact `Vorgang` value ERiC expects for an authenticated send~~ —
   resolved: `"send-Auth"` (see §7.3).
 - ~~Where/how the `.pfx` gets from the user's browser to the worker's
   filesystem without ever passing through the web process in
   plaintext~~ — resolved: presigned direct-to-S3 upload (see §7.4).
-- How the PIN itself gets from the submit request to the worker without
-  being persisted in plaintext anywhere in between (the `EricSubmissionJob`
-  queue row included) — still open.
+- ~~How the PIN itself gets from the submit request to the worker
+  without being persisted in plaintext anywhere in between~~ —
+  resolved: RSA-OAEP envelope encryption into `eric_submission_jobs`,
+  decrypted worker-side only (see §7.5).
 - Retention: does the encrypted cert get deleted after each submission
   (re-upload every time) or kept for repeat filers? Re-upload-per-filing
   is simpler and reduces the sensitive-data footprint but is worse UX.
