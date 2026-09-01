@@ -875,12 +875,14 @@ and were not previously satisfied anywhere in the app:
 section 6, alongside the verbatim § 5 Abs. 2 sentence and the § 15
 server-side-logging disclosure.
 
-**Still open**: § 5 Abs. 1's confirmation requirement isn't satisfied by
-a page merely existing and being linked — it needs an actual "I have
-read this" checkbox somewhere gating software use, the same shape as the
-existing § 356 BGB withdrawal-consent checkbox on the payment page. The
-natural place is the existing mandatory post-login onboarding step
-(gates everything downstream already), but that's an implementation
-decision not made in this pass — this section only closes the
-*content* gap (the mandated text now exists and is linked), not the
-*mechanism* gap (an enforced confirmation step).
+**Mechanism gap also closed**: `User.elster_privacy_notice_confirmed_at`
+(migration `c8f4e21b6a95`) plus `POST /users/me/confirm-elster-privacy-notice`
+records the confirmation server-side, same reasoning as
+`TaxFiling.withdrawal_consent_at` (timestamp never client-suppliable).
+The mandatory onboarding step (`/onboarding`) now gates on it via
+`lib/onboarding.ts`'s `isProfileComplete()` — a checkbox linking to
+`/elster-datenschutzhinweis` must be checked before `Continue` is
+enabled. Existing users who onboarded before this existed are routed
+back to a lightweight one-checkbox version of the same step (not the
+full form again — `isBasicProfileComplete()` distinguishes the two
+cases) the next time `isProfileComplete()` is checked.

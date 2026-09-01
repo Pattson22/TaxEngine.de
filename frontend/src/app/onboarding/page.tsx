@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { updateCurrentUser } from "@/lib/api";
+import { confirmElsterPrivacyNotice, updateCurrentUser } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useRequireAuth } from "@/lib/use-require-auth";
-import { isProfileComplete } from "@/lib/onboarding";
+import { isBasicProfileComplete, isProfileComplete } from "@/lib/onboarding";
 import { Button, ErrorBanner, Input, StatusStamp } from "@/components/ui";
 import { SegmentedDigitInput, dobToIso } from "@/components/tax-form-boxes";
 
@@ -15,8 +16,14 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasConfirmedPrivacyNotice, setHasConfirmedPrivacyNotice] = useState(false);
 
   const alreadyComplete = !authLoading && !!user && isProfileComplete(user);
+  // A user who already completed the basic profile before the privacy-
+  // notice confirmation existed only needs that one extra step, not the
+  // whole form again -- see lib/onboarding.ts's isBasicProfileComplete.
+  const onlyNeedsPrivacyNoticeConfirmation =
+    !authLoading && !!user && isBasicProfileComplete(user) && !alreadyComplete;
 
   useEffect(() => {
     if (alreadyComplete) router.replace("/dashboard");
@@ -24,6 +31,24 @@ export default function OnboardingPage() {
 
   if (authLoading || !token || !user || alreadyComplete) {
     return <div className="mx-auto max-w-2xl px-6 py-14 text-sm text-ink/40">Loading…</div>;
+  }
+
+  async function handleConfirmPrivacyNoticeOnly() {
+    setError(null);
+    if (!hasConfirmedPrivacyNotice) {
+      setError("Please confirm you've read the notice before continuing.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await confirmElsterPrivacyNotice(token as string);
+      await refreshUser();
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save your confirmation.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -50,6 +75,10 @@ export default function OnboardingPage() {
       setError("Every line on this page is required.");
       return;
     }
+    if (!hasConfirmedPrivacyNotice) {
+      setError("Please confirm you've read the ELSTER privacy notice before continuing.");
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -61,6 +90,7 @@ export default function OnboardingPage() {
         city,
         steuernummer,
       });
+      await confirmElsterPrivacyNotice(token as string);
       await refreshUser();
       router.push("/dashboard");
     } catch (err) {
@@ -92,6 +122,25 @@ export default function OnboardingPage() {
 
       {error && <ErrorBanner message={error} />}
 
+      {onlyNeedsPrivacyNoticeConfirmation ? (
+        <div className="border border-ink/15 bg-paper">
+          <div className="px-6 py-6">
+            <PrivacyNoticeCheckbox
+              checked={hasConfirmedPrivacyNotice}
+              onChange={setHasConfirmedPrivacyNotice}
+            />
+          </div>
+          <div className="flex items-center justify-end border-t border-paper-line bg-paper-dim/40 px-6 py-4">
+            <Button
+              type="button"
+              onClick={handleConfirmPrivacyNoticeOnly}
+              disabled={!hasConfirmedPrivacyNotice || isSaving}
+            >
+              {isSaving ? "Saving…" : "Continue"}
+            </Button>
+          </div>
+        </div>
+      ) : (
       <form onSubmit={handleSubmit} className="border border-ink/15 bg-paper">
         <FormLine n={1} label="Geburtsdatum" hint="Date of birth" delay={0}>
           <SegmentedDigitInput
@@ -130,13 +179,45 @@ export default function OnboardingPage() {
           </p>
         </FormLine>
 
+        <div className="border-t border-paper-line px-6 py-6">
+          <PrivacyNoticeCheckbox
+            checked={hasConfirmedPrivacyNotice}
+            onChange={setHasConfirmedPrivacyNotice}
+          />
+        </div>
+
         <div className="flex items-center justify-end border-t border-paper-line bg-paper-dim/40 px-6 py-4">
-          <Button type="submit" disabled={isSaving}>
+          <Button type="submit" disabled={!hasConfirmedPrivacyNotice || isSaving}>
             {isSaving ? "Saving…" : "Continue"}
           </Button>
         </div>
       </form>
+      )}
     </div>
+  );
+}
+
+function PrivacyNoticeCheckbox({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex items-start gap-2.5 text-sm text-ink/70">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 accent-brass"
+      />
+      Ich habe den{" "}
+      <Link href="/elster-datenschutzhinweis" className="underline hover:text-ink" target="_blank">
+        Datenschutzhinweis der Finanzverwaltung
+      </Link>{" "}
+      zur Übermittlung meiner Steuerdaten über ELSTER zur Kenntnis genommen.
+    </label>
   );
 }
 

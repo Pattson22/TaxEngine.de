@@ -78,6 +78,18 @@ class User(Base):
     # exactly 4 digits, first two identifying the Bundesland cluster.
     finanzamt_bufa_nummer: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # § 5 Abs. 1 of the ERiC-Lizenzvereinbarung (see
+    # docs/ELSTER_ERIC_INTEGRATION.md section 8) requires presenting the
+    # Finanzverwaltung's own DSGVO Art. 12-14 info letter
+    # (frontend `/elster-datenschutzhinweis`) before the user uses the
+    # software, with the ability to confirm having read it -- set once,
+    # server-side, by POST /users/me/confirm-elster-privacy-notice (never
+    # client-suppliable via a raw timestamp, same reasoning as
+    # TaxFiling.withdrawal_consent_at).
+    elster_privacy_notice_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     residence_state: Mapped[FederalState] = mapped_column(
         pg_enum(FederalState, "federal_state_enum"), nullable=False
     )

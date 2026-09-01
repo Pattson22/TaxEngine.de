@@ -106,6 +106,10 @@ export function updateCurrentUser(token: string, payload: Partial<User>): Promis
   return request<User>("/users/me", { method: "PATCH", token, body: JSON.stringify(payload) });
 }
 
+export function confirmElsterPrivacyNotice(token: string): Promise<User> {
+  return request<User>("/users/me/confirm-elster-privacy-notice", { method: "POST", token });
+}
+
 // --- Tax filings ---
 
 export function listTaxFilings(token: string): Promise<TaxFiling[]> {

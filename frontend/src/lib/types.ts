@@ -80,6 +80,7 @@ export interface User {
   church_tax_type: ChurchTaxType;
   is_joint_assessment: boolean;
   is_active: boolean;
+  elster_privacy_notice_confirmed_at: string | null;
   created_at: string;
 }
 

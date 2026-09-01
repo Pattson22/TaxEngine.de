@@ -63,6 +63,7 @@ class UserRead(BaseModel):
     church_tax_type: ChurchTaxType
     is_joint_assessment: bool
     is_active: bool
+    elster_privacy_notice_confirmed_at: datetime | None
     created_at: datetime
 
 
