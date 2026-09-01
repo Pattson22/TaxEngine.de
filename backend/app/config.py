@@ -6,6 +6,7 @@ in local development). Never hard-code secrets here — this file defines
 
 from __future__ import annotations
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -74,6 +75,24 @@ class Settings(BaseSettings):
     # data, which must never leave the process on an error event.
     sentry_dsn: str = ""
     sentry_traces_sample_rate: float = 0.0
+
+    @model_validator(mode="after")
+    def _guard_against_live_stripe_key_outside_production(self) -> "Settings":
+        """A live Stripe secret key active anywhere other than
+        production would let routine local/test usage charge a real
+        card -- fail loudly at startup rather than risk it, same
+        principle as the eric-submitter worker's database isolation
+        (see docs/ELSTER_ERIC_INTEGRATION.md's Twelfth update, where a
+        leftover test job very nearly reached the real Finanzamt
+        because nothing enforced that separation until it was added by
+        hand)."""
+        if self.stripe_secret_key.startswith("sk_live_") and self.environment != "production":
+            raise ValueError(
+                f"stripe_secret_key is a LIVE key (sk_live_...) but environment={self.environment!r}, "
+                "not 'production'. Refusing to start -- this would let routine local/test usage "
+                "charge a real card. If this really is production, set ENVIRONMENT=production."
+            )
+        return self
 
 
 settings = Settings()
