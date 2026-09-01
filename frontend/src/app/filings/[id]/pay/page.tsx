@@ -112,6 +112,12 @@ function CheckoutForm({ filingId }: { filingId: string }) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // <PaymentElement> mounts its own iframe asynchronously -- stripe/elements
+  // being non-null only means Stripe.js itself loaded, not that the actual
+  // Payment Element has finished mounting yet. Submitting before it has
+  // throws "elements should have a mounted Payment Element" from Stripe's
+  // own SDK (confirmed live: clicking fast enough hits this every time).
+  const [isElementReady, setIsElementReady] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -141,9 +147,13 @@ function CheckoutForm({ filingId }: { filingId: string }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && <ErrorBanner message={error} />}
-      <PaymentElement />
-      <Button type="submit" disabled={!stripe || isSubmitting} className="w-full">
-        {isSubmitting ? "Processing…" : "Pay now"}
+      <PaymentElement onReady={() => setIsElementReady(true)} />
+      <Button
+        type="submit"
+        disabled={!stripe || !isElementReady || isSubmitting}
+        className="w-full"
+      >
+        {isSubmitting ? "Processing…" : isElementReady ? "Pay now" : "Loading…"}
       </Button>
       <p className="text-xs text-ink/40">
         Your return updates to &quot;fee paid&quot; automatically once Stripe confirms the
