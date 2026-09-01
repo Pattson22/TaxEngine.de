@@ -683,12 +683,64 @@ credential we control. Consequences:
   `submission_mode == KOMPRIMIERT`, since an AUTHENTIFIZIERT filing has no
   paper cover sheet at all.
 
-### 7.4 Open questions before implementation starts
+### 7.4 The `.pfx` transfer path — decided
+
+Direct-to-S3 upload via a presigned URL, never through the FastAPI web
+process. This is a design decision (unlike §7.1–7.3, which are read
+straight off the SDK), made to structurally enforce the §7.2 rule that
+the certificate must only ever touch the `eric-submitter` worker:
+
+1. **Dedicated bucket/prefix**, separate from `taxengine-documents`
+   (`upload_service.py`'s wage-certificate bucket) — call it
+   `elster-certificates/{user_id}/{uuid}.pfx`. Server-side encryption
+   (SSE-KMS with its own key, not the bucket default) and a bucket policy
+   that denies public/list access, same baseline the existing bucket
+   presumably already has, just stricter given what's in it.
+2. **New `CertificateStorage` class** (mirrors `DocumentStorage`'s
+   ABC/S3-implementation split in `documents/storage.py`, but a
+   deliberately different interface — no `upload(data: bytes)` method at
+   all, so the web process cannot accidentally handle plaintext cert
+   bytes even by misuse):
+   - `generate_upload_url(key, content_type, expires_in) -> str` — called
+     from the web process; this is a pure S3 API call
+     (`generate_presigned_url("put_object", ...)`) that never touches the
+     file's actual bytes.
+   - `download_to_path(key, dest_path) -> None` — called only from the
+     `eric-submitter` worker at submission time.
+3. **Upload endpoint** (web process) returns the presigned PUT URL; the
+   browser uploads the `.pfx` directly to S3. The web process only ever
+   learns the storage key, never the file content — so it never appears
+   in a FastAPI request body, and by extension never in Sentry (moot
+   point given `max_request_body_size="never"` already, but this removes
+   the reliance on that guard entirely for this specific data).
+4. **At submission time**, the worker calls `download_to_path()` into a
+   per-job temp file (its own container's ephemeral disk, e.g.
+   `tempfile.mkstemp()`), passes that path to
+   `EricGetHandleToCertificate`, and deletes the temp file in a
+   `finally` block regardless of outcome — mirrors the
+   `EricCloseHandleToCertificate`/handle cleanup already required by §7.1.
+5. Real defense-in-depth here isn't only SSE-KMS: a `.pfx` (PKCS#12) is
+   itself a password-protected keystore, and per §7.2 the PIN that
+   unlocks it is never stored — so even a full read of the bucket by
+   itself doesn't yield a usable signing key. SSE-KMS + a short URL
+   expiry (~5 min) + the restrictive bucket policy are still worth doing,
+   but the PIN separation is the actual load-bearing control.
+
+This does not decide the PIN's own transfer path (web request →
+worker) — that's a separate, still-open question below, since a PIN is
+small text with a different threat model (needs per-submission
+encryption/immediate-discard, not object storage).
+
+### 7.5 Open questions before implementation starts
 
 - ~~Exact `Vorgang` value ERiC expects for an authenticated send~~ —
   resolved: `"send-Auth"` (see §7.3).
-- Where/how the `.pfx` gets from the user's browser to the worker's
-  filesystem without ever passing through the web process in plaintext.
+- ~~Where/how the `.pfx` gets from the user's browser to the worker's
+  filesystem without ever passing through the web process in
+  plaintext~~ — resolved: presigned direct-to-S3 upload (see §7.4).
+- How the PIN itself gets from the submit request to the worker without
+  being persisted in plaintext anywhere in between (the `EricSubmissionJob`
+  queue row included) — still open.
 - Retention: does the encrypted cert get deleted after each submission
   (re-upload every time) or kept for repeat filers? Re-upload-per-filing
   is simpler and reduces the sensitive-data footprint but is worse UX.
