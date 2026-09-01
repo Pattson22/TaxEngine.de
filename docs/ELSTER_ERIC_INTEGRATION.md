@@ -293,6 +293,50 @@ ever made outside of manual SDK-example testing -- worth treating that
 first real attempt with real care (a small, low-stakes filing, reviewed
 XML, someone watching the worker's logs), not as a routine deploy.
 
+**Twelfth update**: `ERIC_SDK_PATH` is now set and verified --
+`NativeEricClient` loads the real Windows x86_64 `ericapi.dll` and
+`EricInitialisiere()`/`EricBeende()` both succeed cleanly. Before starting
+the worker for real, a genuine risk surfaced: `app/eric_submitter/worker.py`
+polls whatever `DATABASE_URL` it's given and submits anything PENDING
+there for real -- and that had been the SAME Postgres database used all
+along for manual UI/browser testing (`taxengine`), which already had a
+leftover `PENDING` job from testing the amendment flow (deleted before
+this could bite). Running the real worker against that database even
+once would eventually transmit fabricated test data to the actual
+Finanzamt under this project's real HerstellerID.
+
+Fixed by giving the worker its own database, never shared with anything
+else: a new `taxengine_live` database (same Postgres instance, `CREATE
+DATABASE taxengine_live`), migrated to the same head revision as
+`taxengine` -- via the same enum-double-create workaround the dev
+database needed earlier (this venv's newer SQLAlchemy version tries to
+create an inline enum twice when it's used as a column type in the same
+migration that also calls `.create()` on it explicitly; pre-creating the
+type via raw SQL and stamping past it sidesteps the bug without touching
+the migration files themselves). Verified schema-identical to `taxengine`
+(same 10 tables, same enum values, `eric_submission_jobs.is_amendment`
+present with the right default) before use.
+
+The worker now gets its OWN env file, `backend/.env.worker.local`
+(gitignored, matches the existing `.env.*.local` pattern; template at
+`.env.worker.local.example`) -- `DATABASE_URL=.../taxengine_live` plus
+the same `ERIC_SDK_PATH`/`ERIC_HERSTELLER_ID`, sourced as real
+environment variables (not just written to `backend/.env`, which the dev
+API/tests keep using unchanged) before running `python -m
+app.eric_submitter.worker`. One portability bug caught while building
+this: `source`-ing a file from bash silently strips unquoted backslashes,
+corrupting a Windows-style `ERIC_SDK_PATH` -- the file uses forward
+slashes instead, which Windows/cffi's `dlopen()` both accept fine.
+
+Verified end-to-end: started the real worker against the empty, isolated
+`taxengine_live` -- clean startup log, no errors, correctly found nothing
+to claim -- then stopped it again, since nothing can land a real job in
+that database's queue until an actual FastAPI deployment is pointed at
+it (a separate, larger step this update deliberately does NOT take:
+provisioning a real customer-facing deployment -- hosting, a production
+Stripe key, a real domain -- is its own project, not a side effect of
+unblocking the worker).
+
 **Correction to an earlier version of this doc**: obtaining the ERiC
 library itself is a *free developer registration* at
 elster.de/eportal/infoseite/entwickler, reviewed by the Bayerisches
