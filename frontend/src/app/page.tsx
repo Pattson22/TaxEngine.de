@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { CountUpEuro, Ledger, LedgerLine } from "@/components/ledger";
 import { Button } from "@/components/ui";
 
 export default function Home() {
@@ -12,60 +11,30 @@ export default function Home() {
           aria-hidden="true"
         />
         <div className="absolute inset-0 bg-ink/85" aria-hidden="true" />
-        <div className="relative mx-auto grid max-w-5xl gap-12 px-6 py-20 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:py-28">
-          <div>
-            <p className="mb-4 text-[11px] font-medium tracking-[0.14em] text-brass-soft uppercase">
-              Steuerjahr 2024
-            </p>
-            <h1 className="font-display text-[2.75rem] leading-[1.05] font-medium tracking-tight text-paper sm:text-[3.4rem]">
-              Know your refund
-              <br />
-              before you file it.
-            </h1>
-            <p className="mt-6 max-w-md text-[15px] leading-relaxed text-paper/65">
-              Add your income and deductions and watch the number update as
-              you go. Nothing costs anything until you&apos;re ready to send
-              it — then it&apos;s one flat fee, €34,90, to file with the
-              Finanzamt via ELSTER.
-            </p>
-            <div className="mt-9 flex flex-wrap items-center gap-5">
-              <Link href="/register">
-                <Button className="bg-brass px-6 py-3 text-ink hover:bg-brass-soft">
-                  Start your return
-                </Button>
-              </Link>
-              <Link
-                href="/login"
-                className="border-b border-paper/25 pb-0.5 text-sm text-paper/70 transition-colors hover:border-paper/60 hover:text-paper"
-              >
-                I already have an account
-              </Link>
-            </div>
-          </div>
-
-          <div className="border border-paper/15 bg-paper p-6 text-ink shadow-[0_30px_60px_-20px_rgba(0,0,0,0.5)]">
-            <p className="mb-1 font-display text-[13px] font-medium tracking-tight text-ink/50">
-              Beispielrechnung — sample return
-            </p>
-            <Ledger className="mt-3">
-              <LedgerLine label="Bruttolohn" value="52.000,00 €" delay={0} />
-              <LedgerLine label="Werbungskosten" value="−1.890,00 €" delay={90} />
-              <LedgerLine label="Sonderausgaben" value="−36,00 €" delay={180} />
-              <LedgerLine
-                label="Zu versteuerndes Einkommen"
-                value="50.074,00 €"
-                tone="total"
-                delay={270}
-              />
-              <LedgerLine label="Einkommensteuer" value="−11.207,00 €" delay={360} />
-              <LedgerLine label="Bereits einbehalten" value="12.441,00 €" delay={450} />
-            </Ledger>
-            <div className="mt-4 flex items-baseline justify-between">
-              <span className="font-display text-sm font-medium text-ink">Erstattung</span>
-              <span className="tabular font-display text-3xl font-medium text-sage">
-                <CountUpEuro cents={123_400} />
-              </span>
-            </div>
+        <div className="relative mx-auto max-w-3xl px-6 py-24 text-center lg:py-32">
+          <h1 className="font-display text-[2.75rem] leading-[1.05] font-medium tracking-tight text-paper sm:text-[3.4rem]">
+            Know your refund
+            <br />
+            before you file it.
+          </h1>
+          <p className="mx-auto mt-6 max-w-md text-[15px] leading-relaxed text-paper/65">
+            Add your income and deductions and watch the number update as you
+            go. Nothing costs anything until you&apos;re ready to send it —
+            then it&apos;s one flat fee, €34,90, to file with the Finanzamt
+            via ELSTER.
+          </p>
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-5">
+            <Link href="/register">
+              <Button className="bg-brass px-6 py-3 text-ink hover:bg-brass-soft">
+                Start your return
+              </Button>
+            </Link>
+            <Link
+              href="/login"
+              className="border-b border-paper/25 pb-0.5 text-sm text-paper/70 transition-colors hover:border-paper/60 hover:text-paper"
+            >
+              I already have an account
+            </Link>
           </div>
         </div>
       </section>
