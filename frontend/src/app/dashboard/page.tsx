@@ -94,8 +94,8 @@ export default function DashboardPage() {
   if (authLoading || !token) return null;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-14">
-      <div className="flex items-end justify-between">
+    <div className="mx-auto max-w-5xl px-6 py-20 md:px-10 md:py-24">
+      <div className="mb-12 flex items-end justify-between">
         <div>
           <Eyebrow>Your account</Eyebrow>
           <PageHeading title="Your returns" />
@@ -136,41 +136,42 @@ export default function DashboardPage() {
           </p>
         </Card>
       ) : (
-        <div className="border-t border-ink/10">
-          {filings.map((filing) => (
-            <button
-              key={filing.id}
-              onClick={() => router.push(`/filings/${filing.id}`)}
-              className="flex w-full flex-col gap-2.5 border-b border-ink/10 py-5 text-left transition-colors hover:bg-ink/[0.03]"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <span className="font-display text-lg font-medium text-ink">{filing.tax_year}</span>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          {filings.map((filing) => {
+            const hasRefund = filing.estimated_refund_cents !== null;
+            const refundIsPositive = hasRefund && filing.estimated_refund_cents! >= 0;
+            return (
+              <button
+                key={filing.id}
+                onClick={() => router.push(`/filings/${filing.id}`)}
+                className="group rounded-2xl border border-ink/6 bg-paper p-8 text-left shadow-[0_1px_2px_rgba(20,23,42,0.04),0_12px_32px_-16px_rgba(20,23,42,0.12)] transition-shadow hover:shadow-[0_1px_2px_rgba(20,23,42,0.06),0_16px_40px_-16px_rgba(20,23,42,0.18)]"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-display text-lg font-semibold tracking-tight text-ink">
+                    {filing.tax_year}
+                  </span>
                   <StatusStamp status={filing.status} />
                 </div>
-                <span
-                  className={`tabular text-sm ${
-                    filing.estimated_refund_cents === null
-                      ? "text-ink/35"
-                      : filing.estimated_refund_cents >= 0
-                        ? "text-sage"
-                        : "text-clay"
+                <p
+                  className={`tabular mt-6 font-display text-3xl font-semibold tracking-tight ${
+                    !hasRefund ? "text-ink/20" : refundIsPositive ? "text-sage" : "text-clay"
                   }`}
                 >
-                  {filing.estimated_refund_cents !== null
-                    ? formatCents(filing.estimated_refund_cents)
-                    : "Not yet calculated"}
-                </span>
-              </div>
-              {categoriesByYear[filing.tax_year] && categoriesByYear[filing.tax_year].size > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {[...categoriesByYear[filing.tax_year]].map((category) => (
-                    <CategoryTab key={category} category={category} />
-                  ))}
-                </div>
-              )}
-            </button>
-          ))}
+                  {hasRefund ? formatCents(Math.abs(filing.estimated_refund_cents!)) : "—,—— €"}
+                </p>
+                <p className="mt-1 text-xs text-ink/35">
+                  {hasRefund ? (refundIsPositive ? "Estimated refund" : "You'd owe") : "Not yet calculated"}
+                </p>
+                {categoriesByYear[filing.tax_year] && categoriesByYear[filing.tax_year].size > 0 && (
+                  <div className="mt-5 flex flex-wrap gap-1.5">
+                    {[...categoriesByYear[filing.tax_year]].map((category) => (
+                      <CategoryTab key={category} category={category} />
+                    ))}
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

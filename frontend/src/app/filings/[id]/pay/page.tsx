@@ -29,12 +29,14 @@ export default function PayFilingPage() {
   if (authLoading || !token) return null;
 
   return (
-    <div className="mx-auto max-w-md px-6 py-14">
-      <Eyebrow>Bearbeitungsgebühr</Eyebrow>
-      <PageHeading
-        title="Pay the processing fee"
-        subtitle={amountCents !== null ? `Flat fee: ${formatCents(amountCents)}` : undefined}
-      />
+    <div className="mx-auto max-w-md px-6 py-20">
+      <div className="mb-10">
+        <Eyebrow>Bearbeitungsgebühr</Eyebrow>
+        <PageHeading
+          title="Pay the processing fee"
+          subtitle={amountCents !== null ? `Flat fee: ${formatCents(amountCents)}` : undefined}
+        />
+      </div>
       {error && <ErrorBanner message={error} />}
       <Card>
         {clientSecret ? (

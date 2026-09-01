@@ -44,12 +44,14 @@ export default function AddRentalIncomePage() {
   if (authLoading || !token) return null;
 
   return (
-    <div className="mx-auto max-w-md px-6 py-14">
-      <Eyebrow tone="sage">Anlage V</Eyebrow>
-      <PageHeading title="Add a rental property" subtitle="Vermietung und Verpachtung." />
+    <div className="mx-auto max-w-md px-6 py-20">
+      <div className="mb-10">
+        <Eyebrow tone="sage">Anlage V</Eyebrow>
+        <PageHeading title="Add a rental property" subtitle="Vermietung und Verpachtung." />
+      </div>
       <Card>
         {error && <ErrorBanner message={error} />}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <Label htmlFor="property_address">Property address</Label>
             <Input id="property_address" name="property_address" required />

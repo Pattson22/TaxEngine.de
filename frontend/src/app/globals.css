@@ -59,6 +59,13 @@ body {
   font-family: var(--font-sans);
 }
 
+h1,
+h2,
+h3 {
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1, "liga" 1;
+}
+
 * {
   border-color: var(--color-paper-line);
 }

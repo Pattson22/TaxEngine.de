@@ -87,15 +87,17 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-md px-6 py-14">
-      <Eyebrow>Deine Angaben — your details</Eyebrow>
-      <PageHeading
-        title="Personal information"
-        subtitle="What the Finanzamt needs to know you by — kept on file for every return you file."
-      />
+    <div className="mx-auto max-w-md px-6 py-20">
+      <div className="mb-10">
+        <Eyebrow>Deine Angaben — your details</Eyebrow>
+        <PageHeading
+          title="Personal information"
+          subtitle="What the Finanzamt needs to know you by — kept on file for every return you file."
+        />
+      </div>
       <Card>
         {error && <ErrorBanner message={error} />}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="first_name">First name</Label>

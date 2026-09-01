@@ -40,12 +40,14 @@ export default function AddSelfEmploymentPage() {
   if (authLoading || !token) return null;
 
   return (
-    <div className="mx-auto max-w-md px-6 py-14">
-      <Eyebrow tone="terracotta">Anlage S / EÜR</Eyebrow>
-      <PageHeading title="Add self-employment income" subtitle="Freelance or business income." />
+    <div className="mx-auto max-w-md px-6 py-20">
+      <div className="mb-10">
+        <Eyebrow tone="terracotta">Anlage S / EÜR</Eyebrow>
+        <PageHeading title="Add self-employment income" subtitle="Freelance or business income." />
+      </div>
       <Card>
         {error && <ErrorBanner message={error} />}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <Label htmlFor="business_name">Business or freelance activity</Label>
             <Input id="business_name" name="business_name" required />

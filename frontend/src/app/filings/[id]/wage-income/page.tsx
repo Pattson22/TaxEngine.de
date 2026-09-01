@@ -81,13 +81,15 @@ export default function AddWageIncomePage() {
   if (authLoading || !token) return null;
 
   return (
-    <div className="mx-auto max-w-md px-6 py-14">
-      <Eyebrow>Lohnsteuerbescheinigung</Eyebrow>
-      <PageHeading title="Add an employer" subtitle="From your electronic wage tax certificate." />
+    <div className="mx-auto max-w-md px-6 py-20">
+      <div className="mb-10">
+        <Eyebrow>Lohnsteuerbescheinigung</Eyebrow>
+        <PageHeading title="Add an employer" subtitle="From your electronic wage tax certificate." />
+      </div>
 
       <label
         htmlFor="document-upload"
-        className={`mb-6 flex cursor-pointer flex-col items-center gap-1.5 border border-dashed px-6 py-8 text-center transition-colors ${
+        className={`mb-6 flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl border border-dashed px-6 py-8 text-center transition-colors ${
           isUploading ? "border-brass/50 bg-brass-soft/10" : "border-ink/20 hover:border-brass/50"
         }`}
       >
@@ -114,7 +116,7 @@ export default function AddWageIncomePage() {
 
       <Card>
         {error && <ErrorBanner message={error} />}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <Label htmlFor="employer_name">Employer name</Label>
             <Input

@@ -46,15 +46,17 @@ export default function AddCapitalIncomePage() {
   if (authLoading || !token) return null;
 
   return (
-    <div className="mx-auto max-w-md px-6 py-14">
-      <Eyebrow tone="indigo">Anlage KAP</Eyebrow>
-      <PageHeading
-        title="Add capital income"
-        subtitle="From your bank or broker's annual tax certificate (Steuerbescheinigung)."
-      />
+    <div className="mx-auto max-w-md px-6 py-20">
+      <div className="mb-10">
+        <Eyebrow tone="indigo">Anlage KAP</Eyebrow>
+        <PageHeading
+          title="Add capital income"
+          subtitle="From your bank or broker's annual tax certificate (Steuerbescheinigung)."
+        />
+      </div>
       <Card>
         {error && <ErrorBanner message={error} />}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <Label htmlFor="institution_name">Bank or broker</Label>
             <Input id="institution_name" name="institution_name" required />

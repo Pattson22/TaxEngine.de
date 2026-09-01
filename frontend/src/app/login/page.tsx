@@ -33,11 +33,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md px-6 py-16">
-      <PageHeading title="Welcome back" />
+    <div className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-md flex-col justify-center px-6 py-20">
+      <div className="mb-10">
+        <PageHeading title="Welcome back" />
+      </div>
       <Card>
         {error && <ErrorBanner message={error} />}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <Label htmlFor="email">Email</Label>
             <Input id="email" name="email" type="email" required />

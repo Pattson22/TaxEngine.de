@@ -77,7 +77,7 @@ export default function OnboardingPage() {
           <p className="mb-2 text-[11px] font-medium tracking-[0.14em] text-brass uppercase">
             Bevor es losgeht — before we start
           </p>
-          <h1 className="font-display text-[26px] leading-tight font-medium text-ink">
+          <h1 className="font-display text-[26px] leading-tight font-semibold tracking-tight text-ink">
             Welcome, {user.first_name}
           </h1>
           <p className="mt-2 max-w-sm text-sm text-ink/55">

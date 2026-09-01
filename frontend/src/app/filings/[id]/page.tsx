@@ -224,7 +224,7 @@ export default function FilingDetailPage() {
       <div className="mb-12 flex items-center justify-between">
         <div>
           <Eyebrow>Steuererklärung</Eyebrow>
-          <h1 className="font-display text-[28px] leading-tight font-medium text-ink">
+          <h1 className="font-display text-[28px] leading-tight font-semibold tracking-tight text-ink">
             Tax year {filing.tax_year}
           </h1>
         </div>
@@ -243,7 +243,7 @@ export default function FilingDetailPage() {
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <CategoryTab category="wage" />
-              <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+              <h2 className="font-display text-sm font-medium tracking-[0.08em] text-ink/70 uppercase">
                 Wage income
               </h2>
             </div>
@@ -275,7 +275,7 @@ export default function FilingDetailPage() {
 
         <BentoTile>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+            <h2 className="font-display text-sm font-medium tracking-[0.08em] text-ink/70 uppercase">
               Deductions
             </h2>
             <button
@@ -307,7 +307,7 @@ export default function FilingDetailPage() {
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <CategoryTab category="capital" />
-              <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+              <h2 className="font-display text-sm font-medium tracking-[0.08em] text-ink/70 uppercase">
                 Capital income
               </h2>
             </div>
@@ -341,7 +341,7 @@ export default function FilingDetailPage() {
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <CategoryTab category="rental" />
-              <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+              <h2 className="font-display text-sm font-medium tracking-[0.08em] text-ink/70 uppercase">
                 Rental income
               </h2>
             </div>
@@ -376,7 +376,7 @@ export default function FilingDetailPage() {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-y-1.5">
             <div className="flex items-center gap-2.5">
               <CategoryTab category="self_employment" />
-              <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+              <h2 className="font-display text-sm font-medium tracking-[0.08em] text-ink/70 uppercase">
                 Self-employment
               </h2>
             </div>
@@ -414,7 +414,7 @@ export default function FilingDetailPage() {
 
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+            <h2 className="font-display text-sm font-medium tracking-[0.08em] text-ink/70 uppercase">
               Calculation
             </h2>
             <Button onClick={handleCalculate} disabled={!canCalculate || isCalculating}>
@@ -515,7 +515,7 @@ export default function FilingDetailPage() {
 
         {isCalculated && filing.status === "CALCULATED" && (
           <section className="rounded-2xl border border-brass/25 bg-brass-soft/10 p-8">
-            <h2 className="font-display text-base font-medium text-ink">Ready to file</h2>
+            <h2 className="font-display text-base font-semibold tracking-tight text-ink">Ready to file</h2>
             <p className="mt-2 text-sm text-ink/60">
               Pay the flat {formatCents(filing.processing_fee_cents)} fee and we&apos;ll submit
               this to the Finanzamt.
@@ -528,7 +528,7 @@ export default function FilingDetailPage() {
 
         {["FEE_PAID", "SUBMITTED", "ACCEPTED", "REJECTED"].includes(filing.status) && (
           <section className="border-t border-ink/8 pt-8">
-            <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+            <h2 className="font-display text-sm font-medium tracking-[0.08em] text-ink/70 uppercase">
               Submission
             </h2>
             {filing.elster_transfer_ticket ? (
@@ -559,7 +559,7 @@ export default function FilingDetailPage() {
             )}
             {submissionHistory.length > 1 && (
               <div className="mt-5 border-t border-ink/10 pt-4">
-                <h3 className="text-xs font-medium tracking-wide text-ink/50 uppercase">
+                <h3 className="text-xs font-medium tracking-[0.08em] text-ink/50 uppercase">
                   Submission history
                 </h3>
                 <ul className="mt-2 space-y-1.5 text-sm text-ink/60">
@@ -578,7 +578,7 @@ export default function FilingDetailPage() {
 
         {filing.elster_transfer_ticket && filing.submission_mode === "KOMPRIMIERT" && (
           <section className="rounded-2xl border border-brass/25 bg-brass-soft/10 p-8">
-            <h2 className="font-display text-base font-medium text-ink">
+            <h2 className="font-display text-base font-semibold tracking-tight text-ink">
               Finish by mail (komprimiert)
             </h2>
             {filing.cover_sheet_mailed_at ? (
@@ -652,7 +652,7 @@ function KinderfreibetragSection({
     <>
       <div className="mb-3 flex items-center gap-2.5">
         <CategoryTab category="children" />
-        <h2 className="font-display text-sm font-medium tracking-wide text-ink/70 uppercase">
+        <h2 className="font-display text-sm font-medium tracking-[0.08em] text-ink/70 uppercase">
           Children
         </h2>
       </div>
