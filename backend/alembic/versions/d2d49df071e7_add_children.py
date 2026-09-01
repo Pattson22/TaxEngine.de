@@ -18,8 +18,15 @@ down_revision: Union[str, Sequence[str], None] = '7a3f9c2e5b41'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# create_type=False -- upgrade() creates the type explicitly below via
+# .create(), and without this the CREATE TABLE below would ALSO try to
+# auto-create it (op.create_table compiles a real CreateTable DDL
+# construct, unlike op.add_column), failing with "type already exists"
+# against a genuinely fresh database. Confirmed by reproducing this
+# exact failure with a clean docker-compose Postgres.
 child_relationship_type_enum = postgresql.ENUM(
-    'BIOLOGICAL_OR_ADOPTED', 'FOSTER', 'GRANDCHILD_OR_STEP', name='child_relationship_type_enum'
+    'BIOLOGICAL_OR_ADOPTED', 'FOSTER', 'GRANDCHILD_OR_STEP', name='child_relationship_type_enum',
+    create_type=False,
 )
 
 

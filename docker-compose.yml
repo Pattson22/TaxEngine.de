@@ -1,0 +1,87 @@
+# Local "prod-like" smoke-testing stack -- not a production deployment
+# manifest by itself (no real host/TLS/scaling config here), but proves
+# the Docker images actually boot and talk to each other correctly.
+#
+# Usage:
+#   cp backend/.env.example backend/.env   # then fill in real values
+#   docker compose up --build
+#
+# The eric-submitter worker is DELIBERATELY not part of the default set
+# of services (see the `worker` profile below) -- see
+# docs/ELSTER_ERIC_INTEGRATION.md's Twelfth update for why the worker
+# must never be pointed at a database used for routine dev/testing. Only
+# start it with `docker compose --profile worker up`, and only after
+# backend/.env.worker.local points at a database dedicated to real
+# submissions, same as the local (non-Docker) setup.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: taxengine
+      POSTGRES_PASSWORD: taxengine
+      POSTGRES_DB: taxengine
+    ports:
+      # 55433, not 55432 -- avoids colliding with a locally running
+      # taxengine-dev container on the host, which already uses 55432.
+      - "55433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taxengine"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://taxengine:taxengine@postgres:5432/taxengine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://taxengine:taxengine@postgres:5432/taxengine
+      CORS_ALLOWED_ORIGINS: '["http://localhost:3000"]'
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  # Real ELSTER submitter. See the header comment above -- opt-in only,
+  # and backend/.env.worker.local must point at a database separate
+  # from the one `postgres`/`backend` above use for routine testing.
+  eric-submitter:
+    build: ./backend
+    profiles: ["worker"]
+    env_file: ./backend/.env.worker.local
+    volumes:
+      # Falls back to a harmless bind of the compose file's own directory
+      # when unset, so `docker compose up` (without --profile worker)
+      # doesn't fail to even parse this file. Set ERIC_SDK_HOST_PATH for
+      # real before ever running `docker compose --profile worker up`.
+      - ${ERIC_SDK_HOST_PATH:-.}:/eric-sdk:ro
+    environment:
+      ERIC_SDK_PATH: /eric-sdk
+    command: ["python", "-m", "app.eric_submitter.worker"]
+
+volumes:
+  postgres_data:

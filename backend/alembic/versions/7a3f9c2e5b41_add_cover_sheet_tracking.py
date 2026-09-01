@@ -18,8 +18,14 @@ down_revision: Union[str, Sequence[str], None] = '26ed37e281a2'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# create_type=False for consistency with the other migrations in this
+# repo that create-then-inline-use an enum (see
+# d2d49df071e7_add_children.py) -- op.add_column doesn't appear to
+# double-create the way op.create_table does, but there's no reason to
+# rely on that distinction holding across SQLAlchemy versions.
 submission_mode_enum = postgresql.ENUM(
-    'KOMPRIMIERT', 'AUTHENTIFIZIERT', name='submission_mode_enum'
+    'KOMPRIMIERT', 'AUTHENTIFIZIERT', name='submission_mode_enum',
+    create_type=False,
 )
 
 

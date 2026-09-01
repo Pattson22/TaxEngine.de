@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+.venv-wsl/
+.env
+.env.*
+!.env.example
+!.env.worker.local.example
+tests/
+.pytest_cache/
+.git/

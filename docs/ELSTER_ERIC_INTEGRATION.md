@@ -337,6 +337,54 @@ provisioning a real customer-facing deployment -- hosting, a production
 Stripe key, a real domain -- is its own project, not a side effect of
 unblocking the worker).
 
+**Correction to the Twelfth update above**: the enum-double-create bug is
+NOT a throwaway-venv/newer-SQLAlchemy artifact as claimed there. Building
+`backend/Dockerfile` and running `alembic upgrade head` against a
+genuinely clean `docker compose` Postgres, with the exact pinned
+`sqlalchemy==2.0.35` from `requirements.txt`, reproduced the identical
+`type "child_relationship_type_enum" already exists` failure. The real
+cause: three migrations (`d2d49df071e7_add_children.py`,
+`a1d8e4f36b52_add_eric_submission_jobs.py`, and
+`7a3f9c2e5b41_add_cover_sheet_tracking.py`) explicitly call `.create()`
+on a `postgresql.ENUM(...)` object and then ALSO use that same object as
+a column type in `op.create_table`/`op.add_column` in the same
+migration — `op.create_table` compiles a real `CreateTable` DDL
+construct that auto-creates any enum column type unless
+`create_type=False` is set, so it tried to create the type a second
+time. Fixed by adding `create_type=False` to all three enum
+definitions (harmless where `op.add_column` turned out not to trigger
+the double-create either way — kept for consistency rather than relying
+on that distinction). This means the earlier manual
+pre-create-then-stamp workaround used for both `taxengine` and
+`taxengine_live` was masking a real bug, not sidestepping a fake one —
+worth knowing if either database is ever rebuilt from scratch instead of
+migrated forward.
+
+**Thirteenth update**: added real deployment infrastructure --
+`backend/Dockerfile` (the same image serves both the FastAPI web process
+and, with a different `command:`, the `eric-submitter` worker — neither
+bakes in the ERiC SDK itself, which the worker still gets via a
+bind-mounted volume + `ERIC_SDK_PATH` at container runtime, exactly like
+local development), `frontend/Dockerfile` (Next.js standalone build),
+`docker-compose.yml`, and `.github/workflows/ci.yml` (backend `pytest`
++ frontend `lint`/`tsc`/`build` on every push/PR). The worker is
+DELIBERATELY not part of the default `docker compose up` service set —
+it's behind a `worker` Compose profile, same isolation principle as the
+Twelfth update's `taxengine_live` split, so routine local use of this
+compose file can never accidentally start a real ERiC-capable process.
+
+All of this was verified for real, not just written and assumed
+correct: both images were built and run locally (backend image imports
+`app.main` cleanly; frontend image serves a real 200), and the full
+`postgres` → `migrate` → `backend` dependency chain was run end-to-end
+against a freshly created, empty Postgres via `docker compose up`,
+which is what caught the enum bug above in the first place. Cleaned up
+afterward (`docker compose down -v`, ad-hoc test images removed) — this
+compose stack is for local smoke-testing and CI-adjacent verification,
+not a production deployment target by itself; provisioning a real host,
+domain, TLS, and live Stripe/S3 credentials remains open (see the
+Twelfth update's closing paragraph).
+
 **Correction to an earlier version of this doc**: obtaining the ERiC
 library itself is a *free developer registration* at
 elster.de/eportal/infoseite/entwickler, reviewed by the Bayerisches

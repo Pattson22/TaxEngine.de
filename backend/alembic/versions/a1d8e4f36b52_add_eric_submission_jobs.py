@@ -18,8 +18,12 @@ down_revision: Union[str, Sequence[str], None] = 'b6e7f3a19c04'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# create_type=False -- see the identical comment in
+# d2d49df071e7_add_children.py; the same double-create-on-CREATE-TABLE
+# failure applies here.
 eric_submission_job_status_enum = postgresql.ENUM(
-    'PENDING', 'PROCESSING', 'SUCCEEDED', 'FAILED', name='eric_submission_job_status_enum'
+    'PENDING', 'PROCESSING', 'SUCCEEDED', 'FAILED', name='eric_submission_job_status_enum',
+    create_type=False,
 )
 
 
