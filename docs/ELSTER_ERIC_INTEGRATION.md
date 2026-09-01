@@ -578,3 +578,115 @@ receipt.
 `SubmissionMode.AUTHENTIFIZIERT` is reserved on the model for the fully
 paperless path once per-user certificate linking exists, so adding it
 later doesn't need a second migration.
+
+## 7. AUTHENTIFIZIERT mode — design (not yet implemented)
+
+This section scopes what building the paperless path actually requires.
+Nothing below is built yet — no migration, no upload endpoint, no wiring
+into `submission_service.py`. The real ERiC struct/function signatures
+here are copied verbatim from the local SDK
+(`eric-sdk/.../include/eric_types.h` and `ericapi.h`, ERiC 44.2.4.0), not
+guessed — this replaces the "opaque struct" placeholder that
+`native_bindings.py` deliberately used until now.
+
+### 7.1 What ERiC actually needs
+
+`eric_verschluesselungs_parameter_t` (`eric_types.h:298-318`), the struct
+`client.py` currently passes as `ffi.NULL`:
+
+```c
+typedef struct {
+    uint32_t version;                    // must be 3 (checked by ERiC)
+    EricZertifikatHandle zertifikatHandle; // from EricGetHandleToCertificate()
+    const byteChar *pin;                 // the taxpayer's certificate PIN
+} eric_verschluesselungs_parameter_t;
+```
+
+`zertifikatHandle` is not the raw certificate bytes — it's an opaque
+handle obtained first via a separate call:
+
+```c
+int EricGetHandleToCertificate(
+    EricZertifikatHandle* hToken,
+    uint32_t* iInfoPinSupport,
+    const byteChar* pathToKeystore);
+```
+
+For the case that matters here (a taxpayer's own ElsterOnline-issued
+certificate — ERiC calls this a "Software-Portalzertifikat"),
+`pathToKeystore` is a filesystem path to a `.pfx` file. Notably, no PIN is
+passed to `EricGetHandleToCertificate` itself — the PIN is only supplied
+later, in `eric_verschluesselungs_parameter_t.pin`, at the actual
+`EricBearbeiteVorgang()` call. The handle must be released afterward via
+`EricCloseHandleToCertificate(hToken)`.
+
+So the real sequence for one AUTHENTIFIZIERT submission is: write the
+taxpayer's `.pfx` to a temp path the worker process can read → open a
+handle to it → build the crypto-parameter struct with that handle plus
+the PIN entered for this submission → call `EricBearbeiteVorgang` with
+that struct instead of `NULL` → close the handle → discard the temp file
+and the PIN from memory.
+
+### 7.2 What this means for storage and handling
+
+This is qualitatively different from anything credential-related handled
+so far this project (Stripe keys, JWT secrets) — a `.pfx` + PIN pair is
+the taxpayer's actual legal signature on a tax return, not an API
+credential we control. Consequences:
+
+- **The `.pfx` file needs encrypted-at-rest storage**, scoped per user,
+  separate from the general document-upload S3 bucket (`config.py`'s
+  `s3_*` settings) given the sensitivity difference — likely its own
+  bucket/prefix with stricter access, or client-side encryption before
+  upload.
+- **The PIN must never be stored.** ERiC's own API shape supports this
+  naturally — the PIN is only needed transiently, once, at submission
+  time. The right UX is almost certainly "enter your ELSTER PIN" as a
+  step in the submit flow (not saved on the profile), same trust
+  boundary as a card CVC.
+- **The cert file and PIN can only ever touch the `eric-submitter`
+  worker process**, never the FastAPI web process — same rule that
+  already keeps `NativeEricClient`/`ericapi.dll` out of the web process
+  (§2), now doubly true because this data is more sensitive than
+  anything currently in that worker.
+- **`EricGetHandleToCertificate` can return PIN-related failure codes**
+  (locked PIN, wrong PIN, etc. — see `EricGetPinStatus()` in the SDK) that
+  need surfacing back to the user as an actionable error, not a generic
+  submission failure.
+
+### 7.3 Code paths that would change
+
+- `native_bindings.py`: declare `EricZertifikatHandle`,
+  `eric_verschluesselungs_parameter_t` (non-opaque),
+  `EricGetHandleToCertificate`, `EricCloseHandleToCertificate` in `_CDEF`.
+- `client.py`: `submit()` gains a way to pass a real crypto parameter
+  (e.g. an optional `certificate_path`/`pin` pair, or a small
+  context-manager wrapping the handle open/close) instead of always
+  `ffi.NULL`.
+- `xml_builder.py:336`: `Vorgang` becomes conditional on
+  `filing.submission_mode` instead of hardcoded `"send-NoSig"` — the
+  correct value for the authenticated path needs confirming against the
+  SDK's `ericdemo` sample / Entwicklerhandbuch (not guessed here; this is
+  the one remaining unconfirmed detail).
+- `submission_service.py`: routes AUTHENTIFIZIERT filings through the new
+  crypto-parameter path; still never loads `ericapi.dll` outside the
+  worker.
+- New model/migration: where the encrypted `.pfx` reference lives (e.g.
+  an `elster_certificate` table or columns on `User`), plus an upload
+  endpoint and a PIN-entry step in the submit flow — none of this exists
+  today.
+- `cover_sheet.py` / `mark-mailed`: become conditional on
+  `submission_mode == KOMPRIMIERT`, since an AUTHENTIFIZIERT filing has no
+  paper cover sheet at all.
+
+### 7.4 Open questions before implementation starts
+
+- Exact `Vorgang` value ERiC expects for an authenticated send (needs the
+  Entwicklerhandbuch or `ericdemo-cpp` sample, not yet checked).
+- Where/how the `.pfx` gets from the user's browser to the worker's
+  filesystem without ever passing through the web process in plaintext.
+- Retention: does the encrypted cert get deleted after each submission
+  (re-upload every time) or kept for repeat filers? Re-upload-per-filing
+  is simpler and reduces the sensitive-data footprint but is worse UX.
+- Legal/compliance review of storing a taxpayer's signing certificate at
+  all, independent of the technical implementation.
