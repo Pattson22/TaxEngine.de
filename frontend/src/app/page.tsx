@@ -6,8 +6,13 @@ export default function Home() {
   return (
     <div>
       {/* Hero: the thesis is the receipt itself, not a claim about it. */}
-      <section className="bg-ink text-paper">
-        <div className="mx-auto grid max-w-5xl gap-12 px-6 py-20 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:py-28">
+      <section className="relative overflow-hidden bg-ink text-paper">
+        <div
+          className="absolute inset-0 bg-[url('/images/hero-background.jpg')] bg-cover bg-[center_38%]"
+          aria-hidden="true"
+        />
+        <div className="absolute inset-0 bg-ink/85" aria-hidden="true" />
+        <div className="relative mx-auto grid max-w-5xl gap-12 px-6 py-20 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:py-28">
           <div>
             <p className="mb-4 text-[11px] font-medium tracking-[0.14em] text-brass-soft uppercase">
               Steuerjahr 2024
