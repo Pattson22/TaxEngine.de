@@ -12,6 +12,9 @@ export function Footer() {
           <Link href="/datenschutz" className="transition-colors hover:text-ink">
             Datenschutz
           </Link>
+          <Link href="/agb" className="transition-colors hover:text-ink">
+            AGB
+          </Link>
         </nav>
       </div>
     </footer>
