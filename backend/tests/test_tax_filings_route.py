@@ -25,6 +25,7 @@ from fastapi import HTTPException
 
 from app.api.routes.tax_filings import (
     calculate_filing,
+    create_filing_payment_intent,
     create_tax_filing,
     get_cover_sheet,
     get_submission_job,
@@ -37,6 +38,7 @@ from app.models.enums import EricSubmissionJobStatus, FilingStatus, SubmissionMo
 from app.models.eric_submission_job import EricSubmissionJob
 from app.models.tax_filing import TaxFiling
 from app.models.user import User
+from app.schemas.payment import PaymentIntentRequest
 from app.schemas.tax_filing import TaxFilingCreate
 
 
@@ -109,6 +111,86 @@ class TestCreateTaxFilingUnsupportedYear:
 class TestListSupportedTaxYears:
     def test_returns_the_currently_reviewed_years(self):
         assert list_supported_tax_years() == [2022, 2023, 2024]
+
+
+def _calculated_filing(**overrides) -> tuple[TaxFiling, User]:
+    user = User(id=uuid.uuid4())
+    defaults = dict(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        tax_year=2024,
+        status=FilingStatus.CALCULATED,
+        processing_fee_cents=3490,
+    )
+    defaults.update(overrides)
+    filing = TaxFiling(**defaults)
+    return filing, user
+
+
+class TestCreateFilingPaymentIntent:
+    """Recording withdrawal_consent_at is what makes the § 356 Abs. 4 BGB
+    early expiry of the statutory withdrawal right (AGB § 5) effective --
+    see the comment in create_filing_payment_intent."""
+
+    def test_rejects_missing_consent_without_touching_stripe(self):
+        filing, user = _calculated_filing()
+        db = MagicMock()
+        db.get.return_value = filing
+
+        with patch("app.api.routes.tax_filings.create_payment_intent_for_filing") as mocked_create:
+            with pytest.raises(HTTPException) as exc_info:
+                create_filing_payment_intent(
+                    filing.id,
+                    PaymentIntentRequest(withdrawal_consent=False),
+                    current_user=user,
+                    db=db,
+                )
+
+        assert exc_info.value.status_code == 400
+        assert filing.withdrawal_consent_at is None
+        mocked_create.assert_not_called()
+
+    def test_consent_is_recorded_and_stripe_is_called(self):
+        filing, user = _calculated_filing()
+        db = MagicMock()
+        db.get.return_value = filing
+        fake_intent = MagicMock(client_secret="secret", id="pi_123")
+
+        with patch(
+            "app.api.routes.tax_filings.create_payment_intent_for_filing", return_value=fake_intent
+        ) as mocked_create:
+            result = create_filing_payment_intent(
+                filing.id,
+                PaymentIntentRequest(withdrawal_consent=True),
+                current_user=user,
+                db=db,
+            )
+
+        assert filing.withdrawal_consent_at is not None
+        mocked_create.assert_called_once_with(filing)
+        assert result.client_secret == "secret"
+        db.commit.assert_called_once()
+
+    def test_retry_does_not_require_consent_again(self):
+        import datetime
+
+        first_consent = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+        filing, user = _calculated_filing(withdrawal_consent_at=first_consent)
+        db = MagicMock()
+        db.get.return_value = filing
+        fake_intent = MagicMock(client_secret="secret", id="pi_123")
+
+        with patch(
+            "app.api.routes.tax_filings.create_payment_intent_for_filing", return_value=fake_intent
+        ):
+            create_filing_payment_intent(
+                filing.id,
+                PaymentIntentRequest(withdrawal_consent=False),
+                current_user=user,
+                db=db,
+            )
+
+        assert filing.withdrawal_consent_at == first_consent  # unchanged, not overwritten
 
 
 def _accepted_komprimiert_filing(**overrides) -> tuple[TaxFiling, User]:

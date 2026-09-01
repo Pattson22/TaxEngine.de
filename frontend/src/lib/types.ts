@@ -152,6 +152,7 @@ export interface TaxFiling {
 
   processing_fee_cents: number;
   fee_paid_at: string | null;
+  withdrawal_consent_at: string | null;
 
   elster_transfer_ticket: string | null;
   elster_submitted_at: string | null;

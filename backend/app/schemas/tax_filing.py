@@ -56,6 +56,7 @@ class TaxFilingRead(BaseModel):
 
     processing_fee_cents: int
     fee_paid_at: datetime | None
+    withdrawal_consent_at: datetime | None
 
     elster_transfer_ticket: str | None
     elster_submitted_at: datetime | None

@@ -192,6 +192,13 @@ class TaxFiling(Base):
     )
     fee_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     payment_provider_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Recorded when the user explicitly requests immediate performance
+    # before paying -- required for the § 356 Abs. 4 BGB early expiry of
+    # the statutory 14-day withdrawal right (AGB § 5) to actually be
+    # effective. Without a server-side record of *when* that consent was
+    # given, the waiver has no evidence behind it. Set only by
+    # create_filing_payment_intent, never editable afterward.
+    withdrawal_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     elster_transfer_ticket: Mapped[str | None] = mapped_column(Text, nullable=True)
     elster_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

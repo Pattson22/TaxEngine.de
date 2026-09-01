@@ -15,7 +15,7 @@ from app.models.eric_submission_job import EricSubmissionJob
 from app.models.tax_filing import TaxFiling
 from app.models.user import User
 from app.schemas.eric_submission_job import EricSubmissionJobRead
-from app.schemas.payment import PaymentIntentResponse
+from app.schemas.payment import PaymentIntentRequest, PaymentIntentResponse
 from app.schemas.tax_filing import TaxFilingCreate, TaxFilingRead, TaxFilingUpdate
 from app.services.payment_service import PaymentError, create_payment_intent_for_filing
 from app.services.tax_calculation_service import calculate_tax_filing, get_supported_tax_years
@@ -146,6 +146,7 @@ def calculate_filing(
 @router.post("/{filing_id}/payment-intent", response_model=PaymentIntentResponse)
 def create_filing_payment_intent(
     filing_id: uuid.UUID,
+    body: PaymentIntentRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PaymentIntentResponse:
@@ -159,6 +160,20 @@ def create_filing_payment_intent(
     anything as paid.
     """
     filing = _get_owned_filing_or_404(filing_id, current_user, db)
+
+    # Recording withdrawal_consent_at is what makes the § 356 Abs. 4 BGB
+    # early expiry of the statutory withdrawal right (AGB § 5) effective
+    # -- the consent must be given before payment, so this must happen
+    # before create_payment_intent_for_filing, not after. Only required
+    # the first time: a retried/failed payment attempt on the same
+    # filing already has consent on record.
+    if filing.withdrawal_consent_at is None:
+        if not body.withdrawal_consent:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You must consent to immediate performance before paying.",
+            )
+        filing.withdrawal_consent_at = datetime.now(timezone.utc)
 
     try:
         intent = create_payment_intent_for_filing(filing)

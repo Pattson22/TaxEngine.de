@@ -150,10 +150,12 @@ export function getSupportedTaxYears(): Promise<number[]> {
 export function createPaymentIntent(
   token: string,
   filingId: string,
+  withdrawalConsent: boolean,
 ): Promise<PaymentIntentResponse> {
   return request<PaymentIntentResponse>(`/tax-filings/${filingId}/payment-intent`, {
     method: "POST",
     token,
+    body: JSON.stringify({ withdrawal_consent: withdrawalConsent }),
   });
 }
 
