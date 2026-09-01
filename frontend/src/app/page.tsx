@@ -1,6 +1,16 @@
 import Link from "next/link";
 import { Button } from "@/components/ui";
 
+// Static pages get a 1-year s-maxage by default (Next.js's documented
+// behavior, see node_modules/next/dist/docs/01-app/02-guides/cdn-caching.md)
+// and Railway's edge (unlike Vercel) does not purge that cache on
+// deploy -- without this, every future homepage edit stays invisible on
+// meinetaxengine.de until the cache happens to expire, regardless of how
+// many times the service is redeployed. Confirmed live: a real deploy
+// sat behind a stale `x-nextjs-cache: HIT` response for the page's full
+// s-maxage window even after an explicit container restart.
+export const dynamic = "force-dynamic";
+
 export default function Home() {
   return (
     <div>
