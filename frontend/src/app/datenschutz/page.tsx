@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Eyebrow, PageHeading } from "@/components/ui";
 import { LegalDraftNotice, LegalPage, LegalSection } from "@/components/legal";
 import { LEGAL_INFO } from "@/lib/legal-info";
@@ -87,6 +88,33 @@ export default function DatenschutzPage() {
           Einreichung ausdrücklich bestätigt haben.
         </p>
         <p>Rechtsgrundlage: Art. 6 Abs. 1 lit. c DSGVO (steuerliche Erklärungspflicht).</p>
+        <p>
+          Datenschutzhinweis der Finanzverwaltung (vorgegebener Wortlaut): „Mit dieser Software
+          werden personenbezogene Daten im Sinne des Art. 4 Nr. 1 Datenschutzgrundverordnung
+          (DSGVO) und Art. 9 Abs. 1 DSGVO zum Zwecke der Verarbeitung erhoben. Neben den reinen
+          Daten, die zur Steuerveranlagung benötigt werden, erhebt die Software Daten über die
+          Art des Betriebssystems des Nutzers und übermittelt diese an die Finanzverwaltung.
+          Diese Daten werden benötigt, um die ordnungsgemäße Verarbeitung der Daten
+          sicherzustellen und Fehlern im Verarbeitungsprozess vorzubeugen. Die Nutzung der Daten
+          erfolgt im Rahmen des Art. 6 Abs. 1 UAbs. 1 Buchst. e i.V.m. Abs. 3 UAbs. 1 Buchst. b
+          DSGVO i.V.m. bundes- bzw. landesgesetzlicher Steuergesetze durch die Finanzverwaltung
+          und nur für den genannten Zweck."
+        </p>
+        <p>
+          Zusätzlich informiert Sie die Finanzverwaltung selbst ausführlich über die
+          Datenverarbeitung im Besteuerungsverfahren -- den vollständigen, von ihr vorgegebenen{" "}
+          <Link href="/elster-datenschutzhinweis" className="underline hover:text-ink">
+            Datenschutzhinweis der Finanzverwaltung
+          </Link>{" "}
+          bringen wir Ihnen hiermit zur Kenntnis, wie es die ERiC-Lizenzvereinbarung mit dem
+          Bayerischen Landesamt für Steuern vorschreibt.
+        </p>
+        <p>
+          Da ERiC bei uns serverseitig läuft (nicht lokal bei Ihnen), werden die dabei
+          entstehenden ERiC-Protokolldateien standardmäßig auf unserem Server gespeichert; sie
+          werden nur im Supportfall und nur mit Ihrer ausdrücklichen Erlaubnis an das Bayerische
+          Landesamt für Steuern weitergeleitet.
+        </p>
       </LegalSection>
 
       <LegalSection title="7. Anmeldung und lokale Speicherung">

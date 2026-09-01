@@ -831,8 +831,56 @@ those, so it gets at least the same treatment, not less.
 - ~~Retention: does the encrypted cert get deleted after each submission
   or kept for repeat filers?~~ — resolved: deleted after each submission
   attempt, no persistent store (see §7.6).
-- Legal/compliance review of storing a taxpayer's signing certificate at
-  all, even transiently, independent of the technical implementation.
-  This is the one item in this section that isn't a technical decision —
-  it needs an actual answer from you (or counsel) before writing any of
-  the code in §7.3, not more scoping.
+- ~~Legal/compliance review~~ — partially addressed: §8 below closes the
+  concrete, contract-mandated disclosure gaps that applied regardless of
+  AUTHENTIFIZIERT. What's still genuinely open, and still needs an actual
+  lawyer, not more scoping: whether TaxEngine.de holding a taxpayer's
+  `.pfx` + PIN even transiently (per the §7.4/§7.5 design) is itself
+  sound under DSGVO/BGB/eIDAS — the ERiC license itself is silent on
+  this specific question (see §8's scope note), so it isn't something
+  the license resolves one way or the other.
+
+## 8. ERiC vendor-license disclosure obligations (found in `lizenz.pdf`)
+
+While sorting the AUTHENTIFIZIERT legal-review item above, the actual
+signed ERiC-Lizenzvereinbarung (`eric-sdk/.../lizenz.pdf`, between the
+Bayerisches Landesamt für Steuern and this project as software
+manufacturer) was read in full for the first time. It does **not**
+address certificate/PIN custody at all — AUTHENTIFIZIERT's core legal
+question (§7.7) genuinely still needs counsel, this contract doesn't
+answer it. It does, however, impose two concrete, verbatim, non-negotiable
+disclosure obligations that apply the moment `NativeEricClient` is used
+for *any* submission — KOMPRIMIERT included, not just AUTHENTIFIZIERT —
+and were not previously satisfied anywhere in the app:
+
+- **§ 5 Abs. 1**: the manufacturer must present end users, before they
+  use the software, with the LfSt's own letter "Allgemeine Informationen
+  zur Umsetzung der datenschutzrechtlichen Vorgaben der Artikel 12 bis 14
+  DSGVO in der Steuerverwaltung" (Anhang 2 of the contract), *with the
+  ability to both review it and confirm having read it* — this is
+  stronger than the other legal pages' "published and linked" pattern;
+  it calls for an actual confirmation step, not just availability.
+- **§ 5 Abs. 2**: the manufacturer must present a specific verbatim
+  `Datenschutzhinweis` sentence (about OS-type data collection sent to
+  the Finanzverwaltung) before use, with the ability to review it (no
+  explicit confirmation requirement for this shorter one).
+- **§ 15**: since ERiC runs server-side here (not locally on the
+  taxpayer's own machine), its log files are stored on our server by
+  default and we're responsible for their data-protection handling;
+  users must be told this, and log files may only be forwarded to the
+  LfSt (support cases) with the user's express prior permission.
+
+**Done in this pass**: added `frontend/src/app/elster-datenschutzhinweis/page.tsx`
+(the full Anhang 2 letter, verbatim) and linked it from `datenschutz/page.tsx`
+section 6, alongside the verbatim § 5 Abs. 2 sentence and the § 15
+server-side-logging disclosure.
+
+**Still open**: § 5 Abs. 1's confirmation requirement isn't satisfied by
+a page merely existing and being linked — it needs an actual "I have
+read this" checkbox somewhere gating software use, the same shape as the
+existing § 356 BGB withdrawal-consent checkbox on the payment page. The
+natural place is the existing mandatory post-login onboarding step
+(gates everything downstream already), but that's an implementation
+decision not made in this pass — this section only closes the
+*content* gap (the mandated text now exists and is linked), not the
+*mechanism* gap (an enforced confirmation step).
