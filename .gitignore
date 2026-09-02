@@ -43,3 +43,10 @@ Thumbs.db
 
 # --- Logs ---
 *.log
+
+# --- ERiC SDK ---
+# backend/eric-sdk-linux is a local directory junction to the extracted
+# real ERiC SDK (see backend/Dockerfile.worker's header comment) --
+# licensed vendor binaries, never committed. Created/removed as a
+# deploy-time step, not a permanent fixture.
+backend/eric-sdk-linux/
