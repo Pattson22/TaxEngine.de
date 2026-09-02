@@ -64,17 +64,16 @@ def create_payment_intent_for_filing(filing: TaxFiling) -> stripe.PaymentIntent:
             amount=filing.processing_fee_cents,
             currency="eur",
             metadata={"filing_id": str(filing.id), "user_id": str(filing.user_id)},
-            # automatic_payment_methods (not an explicit payment_method_types
-            # list) is what Stripe's own docs pair with the unified
-            # <PaymentElement/> -- switched from an explicit ["card"] list
-            # while debugging PaymentElement never mounting in live mode
-            # (see docs/ELSTER_ERIC_INTEGRATION.md-adjacent Stripe debugging
-            # notes): every other cause was independently ruled out (CSP,
-            # payment method domain registration, Cards enabled in live
-            # mode), leaving this pairing as the one remaining untested
-            # difference from Stripe's documented setup. Also surfaces
-            # SEPA/Giropay/etc for German customers as a side effect.
-            automatic_payment_methods={"enabled": True},
+            # Card-only for the MVP. automatic_payment_methods was tried
+            # live while debugging PaymentElement never mounting in live
+            # mode -- confirmed via Stripe's own dashboard that it correctly
+            # expanded "Allowed payment methods" to Card/Bancontact/Klarna/
+            # PayPal/etc, so it reached Stripe fine, but the client-side
+            # mount was still completely dead (same zero-iframe,
+            # zero-console-output signature as with an explicit ["card"]
+            # list). Reverted rather than leave unreviewed payment methods
+            # live in checkout for a fix that didn't work.
+            payment_method_types=["card"],
         )
     except stripe.StripeError as exc:
         # Card-specific declines can't happen here (no card is attached
