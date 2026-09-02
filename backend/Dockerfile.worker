@@ -3,18 +3,16 @@
 # file's header comment and app/eric/native_bindings.py's module
 # docstring: ericapi.so must never load inside the web process).
 #
-# Unlike local development (docker-compose.yml's eric-submitter service
-# bind-mounts ERIC_SDK_HOST_PATH from the host), Railway has no access to
-# the host filesystem a container builds on, so there's no bind-mount
-# equivalent in production. This image bakes the real Linux ERiC SDK
-# (backend/eric-sdk-linux/, a local directory junction to the extracted
-# ERiC-44.2.4.0-Linux-x86_64.jar contents -- gitignored, never committed,
-# see .dockerignore) directly into the image instead. The full SDK is
-# copied as-is (~1.4GB, mostly lib/plugins/ -- 221 Datenart plugins)
-# rather than trimmed to only the ESt-related plugins this project uses:
-# guessing wrong about which plugins EricInitialisiere needs at runtime
-# risks a real submission failing in a way that's hard to diagnose,
-# which matters more here than image size.
+# The real Linux ERiC SDK is NOT baked in at build time here either.
+# First attempt was `COPY eric-sdk-linux /eric-sdk` from a local,
+# gitignored directory (the extracted ERiC-44.2.4.0-Linux-x86_64.jar
+# contents) -- this builds fine with a local `docker build` (reads the
+# real filesystem), but fails on Railway: `railway up` only uploads
+# git-tracked content, so the gitignored directory silently never
+# reaches the build daemon, and the COPY fails with "not found". See
+# app/eric_submitter/fetch_sdk.py's docstring for the real error and the
+# fix: the SDK is uploaded once to S3 by hand and fetched at container
+# STARTUP instead (this image's CMD), not baked in at build time.
 
 FROM python:3.12-slim AS builder
 
@@ -36,11 +34,10 @@ COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini .
 
-# The real ERiC SDK, baked in -- see header comment above.
-COPY eric-sdk-linux /eric-sdk
 ENV ERIC_SDK_PATH=/eric-sdk
 
-RUN useradd --create-home --uid 1000 taxengine
+RUN useradd --create-home --uid 1000 taxengine && \
+    mkdir -p /eric-sdk && chown taxengine:taxengine /eric-sdk
 USER taxengine
 
-CMD ["python", "-m", "app.eric_submitter.worker"]
+CMD ["sh", "-c", "python -m app.eric_submitter.fetch_sdk && exec python -m app.eric_submitter.worker"]
