@@ -57,7 +57,12 @@ export default function AddRentalIncomePage() {
             <Input id="property_address" name="property_address" required />
           </div>
           <div>
-            <Label htmlFor="gross_rental_income">Gross rental income, €</Label>
+            <Label
+              htmlFor="gross_rental_income"
+              hint="Rent actually received during the year, including any recovered utility/service-charge prepayments (Nebenkosten) — before deducting expenses."
+            >
+              Gross rental income, €
+            </Label>
             <Input
               id="gross_rental_income"
               name="gross_rental_income"

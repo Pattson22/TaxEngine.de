@@ -62,11 +62,21 @@ export default function AddCapitalIncomePage() {
             <Input id="institution_name" name="institution_name" required />
           </div>
           <div>
-            <Label htmlFor="gross_income">Gross capital income, €</Label>
+            <Label
+              htmlFor="gross_income"
+              hint="Your total investment income before tax — the 'Kapitalerträge' figure on your bank or broker's Steuerbescheinigung."
+            >
+              Gross capital income, €
+            </Label>
             <Input id="gross_income" name="gross_income" type="number" step="0.01" min="0" required />
           </div>
           <div>
-            <Label htmlFor="kapitalertragsteuer_withheld">Kapitalertragsteuer withheld, €</Label>
+            <Label
+              htmlFor="kapitalertragsteuer_withheld"
+              hint="The flat withholding tax your bank already deducted on this income, shown on the same Steuerbescheinigung."
+            >
+              Kapitalertragsteuer withheld, €
+            </Label>
             <Input
               id="kapitalertragsteuer_withheld"
               name="kapitalertragsteuer_withheld"
@@ -76,7 +86,12 @@ export default function AddCapitalIncomePage() {
             />
           </div>
           <div>
-            <Label htmlFor="solidarity_surcharge_withheld">Solidarity surcharge withheld, €</Label>
+            <Label
+              htmlFor="solidarity_surcharge_withheld"
+              hint="The Solidaritätszuschlag your bank withheld on top of the Kapitalertragsteuer. Leave at 0 if none was withheld."
+            >
+              Solidarity surcharge withheld, €
+            </Label>
             <Input
               id="solidarity_surcharge_withheld"
               name="solidarity_surcharge_withheld"
@@ -86,7 +101,12 @@ export default function AddCapitalIncomePage() {
             />
           </div>
           <div>
-            <Label htmlFor="church_tax_withheld">Church tax withheld, €</Label>
+            <Label
+              htmlFor="church_tax_withheld"
+              hint="Only if your bank withheld Kirchensteuer on this income (you must have registered your religion with them). Leave blank otherwise."
+            >
+              Church tax withheld, €
+            </Label>
             <Input id="church_tax_withheld" name="church_tax_withheld" type="number" step="0.01" min="0" />
           </div>
           <div className="flex gap-3 pt-2">

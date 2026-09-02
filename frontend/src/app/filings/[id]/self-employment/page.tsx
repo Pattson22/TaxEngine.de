@@ -53,11 +53,21 @@ export default function AddSelfEmploymentPage() {
             <Input id="business_name" name="business_name" required />
           </div>
           <div>
-            <Label htmlFor="gross_revenue">Gross revenue, €</Label>
+            <Label
+              htmlFor="gross_revenue"
+              hint="Your total income from this activity for the tax year, before deducting any business expenses — Betriebseinnahmen."
+            >
+              Gross revenue, €
+            </Label>
             <Input id="gross_revenue" name="gross_revenue" type="number" step="0.01" min="0" required />
           </div>
           <div>
-            <Label htmlFor="deductible_expenses">Deductible business expenses, €</Label>
+            <Label
+              htmlFor="deductible_expenses"
+              hint="Costs incurred to earn this income — office supplies, software, travel, professional insurance, and similar. Keep the receipts; don't include private expenses."
+            >
+              Deductible business expenses, €
+            </Label>
             <Input id="deductible_expenses" name="deductible_expenses" type="number" step="0.01" min="0" />
             <p className="mt-1.5 text-xs text-ink/40">
               Gewerbesteuer (trade tax) isn&apos;t modeled yet — this understates the total tax due

@@ -45,12 +45,45 @@ export function Select({
   );
 }
 
-export function Label({ className = "", ...props }: LabelHTMLAttributes<HTMLLabelElement>) {
+/** A small circular "?" that reveals a plain-language explanation of what
+ * a field is asking for on hover/focus -- distinct from InfoTrigger/
+ * SlideOver (slide-over.tsx), which is reserved for citing the actual tax
+ * law behind a computed deduction. This one just answers "what number goes
+ * here," so it's a lighter hover popover rather than a click-to-open panel. */
+export function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="group/tooltip relative inline-flex shrink-0">
+      <span
+        tabIndex={0}
+        aria-label="More information"
+        className="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-indigo-soft/25 text-[10px] leading-none font-semibold text-indigo-soft outline-none transition-colors hover:bg-indigo-soft/40 focus-visible:ring-2 focus-visible:ring-indigo-soft/60"
+      >
+        ?
+      </span>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-48 -translate-x-1/2 rounded-lg border border-ink/10 bg-ink px-3 py-2 text-[11px] leading-relaxed normal-case text-paper opacity-0 shadow-xl transition-opacity duration-150 group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100"
+      >
+        {text}
+      </span>
+    </span>
+  );
+}
+
+export function Label({
+  className = "",
+  children,
+  hint,
+  ...props
+}: LabelHTMLAttributes<HTMLLabelElement> & { hint?: string }) {
   return (
     <label
-      className={`mb-2.5 block text-[11px] font-medium tracking-[0.08em] text-ink/50 uppercase ${className}`}
+      className={`mb-2.5 flex items-center gap-1.5 text-[11px] font-medium tracking-[0.08em] text-ink/50 uppercase ${className}`}
       {...props}
-    />
+    >
+      {children}
+      {hint && <InfoTooltip text={hint} />}
+    </label>
   );
 }
 

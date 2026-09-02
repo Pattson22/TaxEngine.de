@@ -170,7 +170,12 @@ function CategoryFields({
             <Input id="distance_km" name="distance_km" type="number" min="0" required />
           </div>
           <div>
-            <Label htmlFor="days_worked">Days worked on-site</Label>
+            <Label
+              htmlFor="days_worked"
+              hint="How many days during the tax year you actually commuted to your first place of work — not vacation, sick, or home-office days."
+            >
+              Days worked on-site
+            </Label>
             <Input id="days_worked" name="days_worked" type="number" min="0" required />
           </div>
         </>
@@ -187,7 +192,12 @@ function CategoryFields({
     case "DONATIONS":
       return (
         <div>
-          <Label htmlFor="amount_donated">Amount donated, €</Label>
+          <Label
+            htmlFor="amount_donated"
+            hint="Total given during the tax year to a registered charity or nonprofit (gemeinnützige Organisation). Keep the donation receipt (Zuwendungsbestätigung)."
+          >
+            Amount donated, €
+          </Label>
           <Input id="amount_donated" name="amount_donated" type="number" step="0.01" min="0" required />
         </div>
       );
@@ -195,7 +205,12 @@ function CategoryFields({
       return (
         <>
           <div>
-            <Label htmlFor="total_costs">Total childcare costs, €</Label>
+            <Label
+              htmlFor="total_costs"
+              hint="What you paid during the year for childcare (Kita, Tagesmutter, etc.) for children under 14. Two-thirds is deductible, up to €4,000 per child."
+            >
+              Total childcare costs, €
+            </Label>
             <Input id="total_costs" name="total_costs" type="number" step="0.01" min="0" required />
           </div>
           <div>
@@ -207,14 +222,24 @@ function CategoryFields({
     case "HANDWERKERLEISTUNGEN":
       return (
         <div>
-          <Label htmlFor="labor_cost">Labor cost (excl. materials), €</Label>
+          <Label
+            htmlFor="labor_cost"
+            hint="Labor cost only, excluding materials — 20% is credited directly against your tax, up to €1,200/year. Must be paid by bank transfer, not cash, to qualify."
+          >
+            Labor cost (excl. materials), €
+          </Label>
           <Input id="labor_cost" name="labor_cost" type="number" step="0.01" min="0" required />
         </div>
       );
     default:
       return (
         <div>
-          <Label htmlFor="amount">Amount, €</Label>
+          <Label
+            htmlFor="amount"
+            hint="The total amount you're claiming for this category during the tax year."
+          >
+            Amount, €
+          </Label>
           <Input id="amount" name="amount" type="number" step="0.01" min="0" required />
         </div>
       );

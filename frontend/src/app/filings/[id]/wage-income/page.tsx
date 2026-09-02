@@ -128,7 +128,12 @@ export default function AddWageIncomePage() {
             />
           </div>
           <div>
-            <Label htmlFor="gross_wage">Gross wage (Bruttoarbeitslohn), €</Label>
+            <Label
+              htmlFor="gross_wage"
+              hint="Your total pay before any tax or insurance was deducted — Zeile 3 on your Lohnsteuerbescheinigung."
+            >
+              Gross wage (Bruttoarbeitslohn), €
+            </Label>
             <Input
               id="gross_wage"
               name="gross_wage"
@@ -141,7 +146,12 @@ export default function AddWageIncomePage() {
             />
           </div>
           <div>
-            <Label htmlFor="income_tax_withheld">Income tax withheld (Lohnsteuer), €</Label>
+            <Label
+              htmlFor="income_tax_withheld"
+              hint="Wage tax your employer already withheld and paid to the Finanzamt on your behalf — Zeile 4."
+            >
+              Income tax withheld (Lohnsteuer), €
+            </Label>
             <Input
               id="income_tax_withheld"
               name="income_tax_withheld"
@@ -153,7 +163,12 @@ export default function AddWageIncomePage() {
             />
           </div>
           <div>
-            <Label htmlFor="solidarity_surcharge">Solidarity surcharge withheld, €</Label>
+            <Label
+              htmlFor="solidarity_surcharge"
+              hint="The Solidaritätszuschlag withheld from your pay — Zeile 5. Leave at 0 if none was withheld."
+            >
+              Solidarity surcharge withheld, €
+            </Label>
             <Input
               id="solidarity_surcharge"
               name="solidarity_surcharge"
@@ -165,7 +180,12 @@ export default function AddWageIncomePage() {
             />
           </div>
           <div>
-            <Label htmlFor="church_tax_withheld">Church tax withheld, €</Label>
+            <Label
+              htmlFor="church_tax_withheld"
+              hint="Only applies if you're a registered member of a church that levies Kirchensteuer — Zeile 6. Leave blank otherwise."
+            >
+              Church tax withheld, €
+            </Label>
             <Input
               id="church_tax_withheld"
               name="church_tax_withheld"
@@ -177,7 +197,12 @@ export default function AddWageIncomePage() {
             />
           </div>
           <div>
-            <Label htmlFor="pension_insurance">Pension insurance (Rentenversicherung), €</Label>
+            <Label
+              htmlFor="pension_insurance"
+              hint="Your employee share of statutory pension contributions — Zeile 22a. This and the three insurance fields below are deductible as Vorsorgeaufwendungen."
+            >
+              Pension insurance (Rentenversicherung), €
+            </Label>
             <Input
               id="pension_insurance"
               name="pension_insurance"
@@ -189,7 +214,12 @@ export default function AddWageIncomePage() {
             />
           </div>
           <div>
-            <Label htmlFor="health_insurance">Health insurance (Krankenversicherung), €</Label>
+            <Label
+              htmlFor="health_insurance"
+              hint="Your employee share of statutory or private health insurance contributions (basic coverage only) — Zeile 25."
+            >
+              Health insurance (Krankenversicherung), €
+            </Label>
             <Input
               id="health_insurance"
               name="health_insurance"
@@ -201,7 +231,12 @@ export default function AddWageIncomePage() {
             />
           </div>
           <div>
-            <Label htmlFor="long_term_care_insurance">Long-term care insurance (Pflegeversicherung), €</Label>
+            <Label
+              htmlFor="long_term_care_insurance"
+              hint="Your employee share of long-term care insurance contributions — Zeile 26."
+            >
+              Long-term care insurance (Pflegeversicherung), €
+            </Label>
             <Input
               id="long_term_care_insurance"
               name="long_term_care_insurance"
@@ -213,7 +248,12 @@ export default function AddWageIncomePage() {
             />
           </div>
           <div>
-            <Label htmlFor="unemployment_insurance">Unemployment insurance (Arbeitslosenversicherung), €</Label>
+            <Label
+              htmlFor="unemployment_insurance"
+              hint="Your employee share of unemployment insurance contributions — Zeile 27."
+            >
+              Unemployment insurance (Arbeitslosenversicherung), €
+            </Label>
             <Input
               id="unemployment_insurance"
               name="unemployment_insurance"
@@ -224,10 +264,6 @@ export default function AddWageIncomePage() {
               onChange={(e) => setUnemploymentInsurance(e.target.value)}
             />
           </div>
-          <p className="text-xs text-ink/40">
-            These four are on your Lohnsteuerbescheinigung (usually Zeile 22–25) — they&apos;re
-            deductible as Vorsorgeaufwendungen on top of your income tax.
-          </p>
           <div className="flex gap-3 pt-2">
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Saving…" : "Save"}
