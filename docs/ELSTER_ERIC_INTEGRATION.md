@@ -461,29 +461,38 @@ process.** Reasons:
   are exactly the kind of surface you want behind a process boundary with
   its own restart/health-check policy, not inline with request handling.
 
-**Recommended shape:**
+**As-built shape** (see the "Now implemented" note above — this
+superseded the original gRPC/internal-HTTP proposal below it once a
+Postgres-backed job table turned out to need no new infrastructure):
 
 ```
-┌─────────────────┐   gRPC / internal HTTP   ┌───────────────────────┐
-│  FastAPI web app │ ───────────────────────► │  eric-submitter worker │
-│  (public-facing) │ ◄─────────────────────── │  (own container)       │
-└─────────────────┘      job status/result    │  - cffi bindings to    │
-                                               │    libericapi          │
-                                               │  - holds the org cert  │
-                                               └───────────────────────┘
+┌─────────────────┐   writes an EricSubmissionJob row   ┌───────────────────────┐
+│  FastAPI web app │ ───────────────────────────────────► │  eric-submitter worker │
+│  (public-facing) │                                      │  (own container/      │
+│                  │ ◄─────────────────────────────────── │   Railway service)     │
+└─────────────────┘   polls/claims via SELECT ... FOR     │  - cffi bindings to    │
+                       UPDATE SKIP LOCKED, writes result   │    ericapi.dll/.so     │
+                       back onto the SAME job/filing rows  │  - holds the org cert  │
+                                                            └───────────────────────┘
 ```
 
-- The web app enqueues a submission job (`tax_filings.id`) onto an internal
-  queue (e.g. a Postgres-backed job table or Redis/SQS) rather than calling
-  ERiC synchronously in the request path — submissions can take seconds and
-  must survive a web-process restart.
+- The web app enqueues a submission job (`tax_filings.id`) as an
+  `eric_submission_jobs` row rather than calling ERiC synchronously in
+  the request path — submissions can take seconds and must survive a
+  web-process restart.
 - The `eric-submitter` worker is the **only** process that links against
   ERiC, via `cffi` (preferred over raw `ctypes` for a large C API — cffi's
   ABI/API modes give cleaner struct marshaling for ERiC's parameter structs).
-- The worker polls/consumes jobs, builds the XML (see §3), calls
-  `EricCheckXML` then `EricBearbeiteVorgang`, and writes the result back via
-  the same internal channel — never direct DB access shared with the web
-  tier's connection pool, to keep the failure domains separate.
+- The worker polls/claims jobs from the shared Postgres database, builds
+  the XML (see §3), calls `EricCheckXML` then `EricBearbeiteVorgang`, and
+  writes the result back onto that same database — deliberately the
+  opposite of a separate RPC channel: the job table itself is both the
+  queue and the status channel, so there's no second protocol to keep in
+  sync. What's still kept separate is credentials and the ERiC process
+  itself (its own container/service, its own DB user in production —
+  see the Twelfth update's `taxengine_live` split), which is what
+  actually delivers the crash-isolation goal below, not network
+  separation.
 
 ## 3. Validation & XML Bundling
 
@@ -509,43 +518,61 @@ serialization.
 
 ## 4. Security
 
-- **Organzertifikat / Softwarezertifikat**: ERiC requires a registered
+**Status check against what actually got built**: the KOMPRIMIERT path
+this project implemented (§6) needs no org-level certificate at all —
+only the taxpayer's own signature via the paper cover sheet, or (once
+built) their personal `.pfx`+PIN under §7, which already has its own
+storage/retention design there. So the first bullet below (written
+before that KOMPRIMIERT/AUTHENTIFIZIERT distinction was worked out)
+doesn't actually apply to this project's submission path — no
+Organzertifikat is used or stored anywhere in the codebase today. Of the
+rest, **least privilege is real** (verified: `NativeEricClient` is only
+ever instantiated in `app/eric_submitter/worker.py`, never the web
+process); **audit logging and PII-at-rest encryption are NOT built** —
+no audit log table exists, and `pgcrypto` is enabled only for
+`gen_random_uuid()`, not column encryption. These remain recommendations
+to revisit before handling real filings at scale, not implemented
+controls.
+
+- ~~**Organzertifikat / Softwarezertifikat**: ERiC requires a registered
   certificate (`.pfx`) tied to TaxEngine.de's BZSt developer registration.
   Store it in a secrets manager (e.g. AWS Secrets Manager / HashiCorp
   Vault), never on disk in the container image or in source control; the
-  worker fetches it into memory at startup only.
-- **Mutual TLS** to the Elster servers is handled internally by ERiC using
-  that certificate — our job is solely to keep the certificate's private
-  key encrypted at rest and rotate it before expiry (BZSt certs have fixed
-  validity windows).
-- **PII/tax-data encryption at rest**: the wage_tax_certificates and
-  deductions tables contain sensitive financial data — enable Postgres
+  worker fetches it into memory at startup only.~~ — doesn't apply, see
+  above.
+- **Mutual TLS** to the Elster servers is handled internally by ERiC —
+  not something this project configures itself.
+- **PII/tax-data encryption at rest** (NOT built): the wage_tax_certificates
+  and deductions tables contain sensitive financial data — enable Postgres
   column- or disk-level encryption (e.g. pgcrypto for specific columns, or
   full-disk encryption at the managed-DB layer) and restrict the
   eric-submitter worker's DB credentials to only the tables/rows it needs.
-- **Audit logging**: every call into ERiC (attempt, XML payload hash,
-  result code, Transferticket) is written to an append-only audit log
-  table, separate from `tax_filings`, satisfying both GoBD (Grundsätze zur
-  ordnungsmäßigen Führung und Aufbewahrung von Büchern) recordkeeping
-  expectations and internal fraud/dispute investigation needs.
-- **Least privilege**: only the eric-submitter worker holds ERiC
+- **Audit logging** (NOT built): every call into ERiC (attempt, XML payload
+  hash, result code, Transferticket) should be written to an append-only
+  audit log table, separate from `tax_filings`, satisfying both GoBD
+  (Grundsätze zur ordnungsmäßigen Führung und Aufbewahrung von Büchern)
+  recordkeeping expectations and internal fraud/dispute investigation
+  needs.
+- **Least privilege** (built): only the eric-submitter worker holds ERiC
   credentials; the web tier and any analytics/BI access never touch the
   certificate or raw XML payloads.
 
 ## 5. Operational Notes
 
-- **Sandbox vs. production endpoints**: ERiC exposes a test system
-  (`EricTestmode`) that validates and round-trips submissions without
-  actually filing with the Finanzamt — the full CI/staging pipeline runs
-  against this before any deploy touches the production BZSt endpoint.
-- **Idempotency**: a submission job must be safe to retry (e.g. worker
-  crash mid-call). Before re-submitting, check whether a
-  `elster_transfer_ticket` already exists for this `tax_filings.id` —
-  ERiC/BZSt do not want duplicate filings for the same taxpayer/year, and
-  `tax_filings` already enforces `UNIQUE (user_id, tax_year)` at the DB
-  layer as a backstop.
-- **Reconciliation**: on success, transition `tax_filings.status` from
-  `SUBMITTED` to `ACCEPTED` (or `REJECTED` with
+- **Sandbox vs. production endpoints** (NOT built): ERiC exposes a test
+  system (`EricTestmode`) that validates and round-trips submissions
+  without actually filing with the Finanzamt. CI today runs the (DB-free,
+  ERiC-free) pytest suite only — there is no staging pipeline that
+  actually round-trips through `EricTestmode` before a deploy touches the
+  production BZSt endpoint. Worth building before real filing volume.
+- **Idempotency** (built, see the Seventh/Tenth updates): a submission job
+  must be safe to retry (e.g. worker crash mid-call). Before
+  re-submitting, check whether a `elster_transfer_ticket` already exists
+  for this `tax_filings.id` — ERiC/BZSt do not want duplicate filings for
+  the same taxpayer/year, and `tax_filings` already enforces `UNIQUE
+  (user_id, tax_year)` at the DB layer as a backstop.
+- **Reconciliation** (built): on success, transition `tax_filings.status`
+  from `SUBMITTED` to `ACCEPTED` (or `REJECTED` with
   `elster_rejection_reason` populated) — this state machine is the
   single source of truth the frontend polls/subscribes to, not raw ERiC
   return codes.
