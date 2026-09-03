@@ -98,7 +98,7 @@ export default function DatenschutzPage() {
           sicherzustellen und Fehlern im Verarbeitungsprozess vorzubeugen. Die Nutzung der Daten
           erfolgt im Rahmen des Art. 6 Abs. 1 UAbs. 1 Buchst. e i.V.m. Abs. 3 UAbs. 1 Buchst. b
           DSGVO i.V.m. bundes- bzw. landesgesetzlicher Steuergesetze durch die Finanzverwaltung
-          und nur für den genannten Zweck."
+          und nur für den genannten Zweck.“
         </p>
         <p>
           Zusätzlich informiert Sie die Finanzverwaltung selbst ausführlich über die

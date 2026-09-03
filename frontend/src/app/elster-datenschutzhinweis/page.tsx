@@ -62,7 +62,7 @@ export default function ElsterDatenschutzhinweisPage() {
 
       <LegalSection title="1. Wer sind wir?">
         <p>
-          „Wir" sind die Finanzbehörden des Bundes (Ausnahme: Zollverwaltung) und der Länder und
+          „Wir“ sind die Finanzbehörden des Bundes (Ausnahme: Zollverwaltung) und der Länder und
           für die Verarbeitung personenbezogener Daten zu steuerlichen Zwecken verantwortlich.
         </p>
       </LegalSection>
@@ -101,7 +101,7 @@ export default function ElsterDatenschutzhinweisPage() {
           Lohnsteuerklasse, Beruf, Bankverbindung, Angaben über abgegebene Steuererklärungen).
         </p>
         <p>
-          Besondere Kategorien personenbezogener Daten ("sensible Daten") erhebt die
+          Besondere Kategorien personenbezogener Daten („sensible Daten“) erhebt die
           Finanzverwaltung ebenfalls nur, wenn dies für das Besteuerungsverfahren erforderlich
           ist -- z. B. Angaben über die Religionszugehörigkeit für die Kirchensteuer, oder
           Angaben über Erkrankungen/Behinderungen für außergewöhnliche Belastungen.
@@ -113,9 +113,9 @@ export default function ElsterDatenschutzhinweisPage() {
           Im weitgehend automationsgestützten Besteuerungsverfahren werden Ihre
           personenbezogenen Daten gespeichert und dann in zumeist maschinellen Verfahren der
           Festsetzung und Erhebung der Steuer zugrunde gelegt. Rechtsverbindliche Entscheidungen
-          trifft die Finanzverwaltung nur dann auf Grundlage einer "vollautomatischen"
+          trifft die Finanzverwaltung nur dann auf Grundlage einer „vollautomatischen“
           Verarbeitung personenbezogener Daten, wenn dies gesetzlich zugelassen ist (z. B.
-          "vollautomatischer" Steuerbescheid nach § 155 Absatz 4 der Abgabenordnung).
+          „vollautomatischer“ Steuerbescheid nach § 155 Absatz 4 der Abgabenordnung).
         </p>
       </LegalSection>
 
@@ -158,7 +158,7 @@ export default function ElsterDatenschutzhinweisPage() {
         <p>
           Im BMF-Schreiben zum Datenschutz im Steuerverwaltungsverfahren vom 13. Januar 2020
           (zuletzt geändert durch das BMF-Schreiben vom 17. Juni 2021, BStBl 2020 I S. 143 und
-          BStBl 2021 I S. 809) sowie in der Broschüre „Steuern von A bis Z" auf
+          BStBl 2021 I S. 809) sowie in der Broschüre „Steuern von A bis Z“ auf
           bundesfinanzministerium.de.
         </p>
       </LegalSection>
