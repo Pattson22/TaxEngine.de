@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui";
+import { HeroFormBackdrop } from "@/components/hero-form-backdrop";
 
 // Static pages get a 1-year s-maxage by default (Next.js's documented
 // behavior, see node_modules/next/dist/docs/01-app/02-guides/cdn-caching.md)
@@ -14,13 +15,19 @@ export const dynamic = "force-dynamic";
 export default function Home() {
   return (
     <div>
-      {/* Hero: the thesis is the receipt itself, not a claim about it. */}
+      {/* Hero: the thesis is the receipt itself, not a claim about it --
+          so the backdrop is a drawn German tax form (see
+          components/hero-form-backdrop.tsx for what it replaced and why),
+          scrimmed toward the centre so the headline keeps full contrast
+          while the form stays legible out at the edges. */}
       <section className="relative overflow-hidden bg-ink text-paper">
+        <div className="absolute inset-0" aria-hidden="true">
+          <HeroFormBackdrop />
+        </div>
         <div
-          className="absolute inset-0 bg-[url('/images/hero-background.jpg')] bg-cover bg-[center_38%]"
+          className="absolute inset-0 bg-[radial-gradient(ellipse_58%_62%_at_50%_46%,#14172a_38%,rgba(20,23,42,0.58)_100%)]"
           aria-hidden="true"
         />
-        <div className="absolute inset-0 bg-ink/85" aria-hidden="true" />
         <div className="relative mx-auto max-w-3xl px-6 py-24 text-center lg:py-32">
           <h1 className="font-display text-[2.75rem] leading-[1.05] font-medium tracking-tight text-paper sm:text-[3.4rem]">
             Know your refund
