@@ -7,16 +7,17 @@ export function LegalPage({ children }: { children: ReactNode }) {
   return <div className="mx-auto max-w-2xl px-6 py-20 md:py-24">{children}</div>;
 }
 
-/** A visible reminder that this page is a compliance draft, not a
- * finished legal document -- the bracketed placeholders in
- * lib/legal-info.ts need real details, and the whole page needs a
- * lawyer's review before it goes live, especially given how sensitive
- * the data this product handles is. */
+/** A visible reminder that this page is not yet a finished legal
+ * document. The identity details in lib/legal-info.ts are now real, so
+ * that half of the original warning is done -- what remains is the
+ * lawyer's review, which matters more than usual for a product that
+ * handles taxpayers' full financial data and transmits it to the
+ * Finanzamt. See lib/legal-info.ts's STATUS note for the open items. */
 export function LegalDraftNotice() {
   return (
     <div className="mb-10 border-l-2 border-brass bg-brass-soft/10 px-4 py-3 text-sm text-ink/70">
-      Entwurf -- vor dem Livegang durch die tatsächlichen Angaben ersetzen und von einer
-      Rechtsanwältin oder einem Rechtsanwalt für IT-/Datenschutzrecht prüfen lassen.
+      Diese Seite wurde noch nicht von einer Rechtsanwältin oder einem Rechtsanwalt für
+      IT-/Datenschutzrecht geprüft.
     </div>
   );
 }

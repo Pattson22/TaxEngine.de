@@ -12,20 +12,30 @@
 // for a product that processes taxpayers' full financial and tax
 // data and transmits it to the Finanzamt.
 
+// STATUS: the operator's identity and contact details below are real and
+// supplied by the operator. Two things are still outstanding before this
+// product should be taking money from real filers:
+//   1. legalForm is empty because NO Gewerbe has been registered yet, and
+//      the site charges EUR 34,90 live. A paid service is commercial
+//      trading; the Impressum must not imply a business that does not
+//      exist, so the line is omitted rather than guessed (see
+//      impressum/page.tsx's hasLegalForm).
+//   2. Neither this page nor datenschutz/page.tsx has been reviewed by a
+//      lawyer, which matters more than usual here -- see the note above.
 export const LEGAL_INFO = {
-  operatorName: "[Vollständiger Name / Firma]",
+  operatorName: "Patrick Thompson",
   legalForm: "[z. B. Einzelunternehmen / Kleingewerbe / GmbH]",
   representedBy: "[Vertretungsberechtigte Person -- nur bei juristischer Person nötig]",
-  street: "[Straße und Hausnummer]",
-  postalCode: "[PLZ]",
-  city: "[Ort]",
+  street: "Sewanstraße 179",
+  postalCode: "10319",
+  city: "Berlin",
   country: "Deutschland",
-  email: "[kontakt@taxengine.de]",
-  phone: "[Telefonnummer -- optional]",
+  email: "pattson22@gmail.com",
+  phone: "+49 15563170243",
   registerCourt: "[Registergericht -- nur bei Handelsregistereintrag]",
   registerNumber: "[Registernummer -- nur bei Handelsregistereintrag]",
   vatId: "[USt-IdNr. -- falls vorhanden]",
-  supervisoryAuthority: "[Zuständige Landesdatenschutzbehörde am Firmensitz]",
+  supervisoryAuthority: "Berliner Beauftragte für Datenschutz und Informationsfreiheit",
   // Real, verified technical facts (Railway project configuration) --
   // unlike the placeholders above, these are not the operator's to fill
   // in, so they're filled in here directly. hostingProvider being a

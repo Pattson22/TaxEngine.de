@@ -11,6 +11,14 @@ export default function ImpressumPage() {
   const hasVatId = !info.vatId.startsWith("[");
   const hasRepresentative = !info.representedBy.startsWith("[");
   const hasPhone = !info.phone.startsWith("[");
+  // A natural person trading under their own name has no Rechtsform to
+  // state -- § 5 DDG wants the name and a summonable address, and a legal
+  // form only exists once there is a registered business behind it. So
+  // this line is omitted rather than filled with a guess: printing
+  // "Einzelunternehmen" for someone who has not filed a Gewerbeanmeldung
+  // would be an inaccurate Impressum, which is the exact risk this file
+  // exists to avoid.
+  const hasLegalForm = !info.legalForm.startsWith("[");
 
   return (
     <LegalPage>
@@ -22,8 +30,12 @@ export default function ImpressumPage() {
         <p>
           {info.operatorName}
           <br />
-          {info.legalForm}
-          <br />
+          {hasLegalForm && (
+            <>
+              {info.legalForm}
+              <br />
+            </>
+          )}
           {info.street}
           <br />
           {info.postalCode} {info.city}
