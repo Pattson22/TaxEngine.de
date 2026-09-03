@@ -27,8 +27,8 @@ corrected here.) Sources: [Taxfix — costs at a glance](https://taxfix.de/en/co
 | Kirchensteuer + Kappung (capping) | ✅ | ✅ (approximate state-level rate table, see `church_tax.py`) |
 | Sonderausgaben (donations + carry-forward, childcare) | ✅ | ✅ |
 | §35a Handwerkerleistungen credit | ✅ | ✅ |
-| Capital gains (Anlage KAP, Abgeltungsteuer + Sparer-Pauschbetrag) | ✅ | ✅ (Günstigerprüfung election to use the progressive tariff instead is NOT modeled) |
-| Rental income (Anlage V) | ✅ | ✅ (AfA depreciation schedule NOT modeled — expected pre-computed) |
+| Capital gains (Anlage KAP, Abgeltungsteuer + Sparer-Pauschbetrag) | ✅ | ✅ (incl. the §32d Abs. 6 progressive-tariff Günstigerprüfung election, applied automatically; its interaction with the Kinderfreibetrag election is not modeled — see `capital_gains.py`) |
+| Rental income (Anlage V) | ✅ | ✅ (linear §7 Abs. 4 building AfA computed when the statement supplies `building_acquisition_cost_cents` + `building_completion_year`, else expenses are trusted as pre-computed; one year at a time — no first-year pro-ration, degressive variants, or cumulative schedule, see `afa.py`. NOTE: `xml_builder.py` still transmits only the stored `deductible_expenses_cents`, so computed AfA reaches the refund estimate but NOT the submitted Anlage V) |
 | Self-employment / freelance (Anlage S, EÜR) | — (Taxfix targets employees/simple cases) | ✅ (Gewerbesteuer NOT modeled — correct for freelancers, understates Gewerbebetrieb) |
 | Kinderfreibetrag vs. Kindergeld Günstigerprüfung | ✅ | ✅ (the calculation itself still treats children as a plain count — see `kinderfreibetrag.py`; children ARE first-class `app/models/child.py` entities for ELSTER submission identity data) |
 | Real payment integration | ✅ | ✅ (Stripe PaymentIntent + verified webhook) |
@@ -172,14 +172,25 @@ notes. A few highlights:
    deploy. See `docs/ELSTER_ERIC_INTEGRATION.md` for exactly where this
    stands.
 5. **Smaller, explicitly-documented approximations** worth revisiting
-   before this handles real filings: the §32d Abs. 6 EStG capital-gains
-   Günstigerprüfung election, AfA depreciation schedules, Gewerbesteuer,
-   partial-year Kinderfreibetrag eligibility and the non-custodial-parent
+   before this handles real filings. Two of these are approximations
+   *within* a feature that is built and wired, not missing features: the
+   §32d Abs. 6 EStG capital-gains Günstigerprüfung election runs
+   automatically (`tax_engine/capital_gains.py`), but folds capital
+   income into taxable income *before* any Kinderfreibetrag adjustment,
+   so the interaction between the two elections is unmodeled; and linear
+   building AfA is computed (`tax_engine/afa.py`, §7 Abs. 4 EStG, when a
+   rental statement supplies both `building_acquisition_cost_cents` and
+   `building_completion_year`) at the standard 2–3% rate table, but for a
+   single year only — no first-year monthly pro-ration, no
+   degressive/Sonderabschreibung variants, and no cumulative multi-year
+   schedule. Genuinely absent: Gewerbesteuer, and partial-year
+   Kinderfreibetrag eligibility plus the non-custodial-parent
    half-transfer (children ARE now first-class entities with real
    identity data for submission purposes, see `app/models/child.py` —
    what's still simplified is the Günstigerprüfung calculation itself,
-   per `kinderfreibetrag.py`'s docstring), and the Kirchensteuer Kappung
-   rate table's per-state-not-per-denomination simplification.
+   per `kinderfreibetrag.py`'s docstring). Also approximate: the
+   Kirchensteuer Kappung rate table's per-state-not-per-denomination
+   simplification.
 6. **No frontend for the `/children` CRUD API and no automated frontend
    tests.** The backend `/children` route, first-class
    `app/models/child.py` entities, and their Anlage Kind XML mapping all

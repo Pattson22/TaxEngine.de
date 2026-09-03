@@ -352,14 +352,25 @@ its own section of `docs/ELSTER_ERIC_INTEGRATION.md`:
   retrieval round trip is `send-Auth` — which makes §7 the gateway to
   it rather than an independent nicety.
 
-Not yet implemented: capital-gains Günstigerprüfung (§32d Abs. 6 EStG
-election to use the progressive tariff instead of Abgeltungsteuer),
-partial-year Kinderfreibetrag eligibility and the non-custodial-parent
-half-transfer (the Günstigerprüfung *calculation* still treats children
-as a plain count — see `kinderfreibetrag.py`'s docstring), AfA
-depreciation schedules for rental income, Gewerbesteuer for
-self-employment, §32b Progressionsvorbehalt for Lohnersatzleistungen
-and the §33b Behinderten-Pauschbetrag (both surfaced by the §9 scoping:
+Built, but with scope simplifications spelled out in their own module
+docstrings rather than left implicit: the §32d Abs. 6 EStG capital-gains
+Günstigerprüfung (`tax_engine/capital_gains.py`) runs automatically and
+elects the progressive tariff whenever it beats the flat Abgeltungsteuer,
+but folds capital income into the taxable income figure *before* any
+Kinderfreibetrag adjustment, so the interaction between the two elections
+is not modeled; and linear building AfA (`tax_engine/afa.py`, §7 Abs. 4
+EStG, computed when a rental statement supplies both
+`building_acquisition_cost_cents` and `building_completion_year`) applies
+the standard 2–3% rate table for one year, without first-year monthly
+pro-ration, degressive/Sonderabschreibung variants, or cumulative
+multi-year schedule tracking.
+
+Not yet implemented: partial-year Kinderfreibetrag eligibility and the
+non-custodial-parent half-transfer (the Günstigerprüfung *calculation*
+still treats children as a plain count — see `kinderfreibetrag.py`'s
+docstring), Gewerbesteuer for self-employment, §32b
+Progressionsvorbehalt for Lohnersatzleistungen and the §33b
+Behinderten-Pauschbetrag (both surfaced by the §9 scoping:
 VaSt can retrieve exactly this data, and retrieving a figure the engine
 then silently drops would understate the assessed tax), a frontend form
 for children, Einspruch (formal objection to an assessment — depends on
