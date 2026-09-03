@@ -32,8 +32,8 @@ corrected here.) Sources: [Taxfix — costs at a glance](https://taxfix.de/en/co
 | Self-employment / freelance (Anlage S, EÜR) | — (Taxfix targets employees/simple cases) | ✅ (Gewerbesteuer NOT modeled — correct for freelancers, understates Gewerbebetrieb) |
 | Kinderfreibetrag vs. Kindergeld Günstigerprüfung | ✅ | ✅ (the calculation itself still treats children as a plain count — see `kinderfreibetrag.py`; children ARE first-class `app/models/child.py` entities for ELSTER submission identity data) |
 | Real payment integration | ✅ | ✅ (Stripe PaymentIntent + verified webhook) |
-| ELSTER submission | ✅ | 🔶 real `cffi` binding to the actual ERiC library, verified end-to-end — `EricCheckXML()` passes cleanly for a document combining wages, capital/rental/self-employment/children income, donations, church tax paid, AND a real Vorsatz cover-sheet block (Steuernummer converted via the real `EricMakeElsterStnr()`); `xml_builder.py` now maps every real Anlage this project's data model supports; Finanzamt routing (`User.finanzamt_bufa_nummer`) is collected and wired through automatically; a real (if not production-hardened) `eric-submitter` worker process now exists (`app/eric_submitter/worker.py` + an `eric_submission_jobs` queue table) and `POST /tax-filings/{id}/submit` queues jobs onto it (`202 Accepted` + `GET /{id}/submission-job` polling) — `submit_filing()`/`StubEricClient` remain only as directly-tested helpers, no route calls them; the `HerstellerID` has been approved: **`04505`**, assigned to "TaxEngine.de" specifically (confirmed 2026-09-01), now set as `ERIC_HERSTELLER_ID` in the local `.env` — the last remaining step is pointing `ERIC_SDK_PATH` at a real worker deployment |
-| Guided interview UX / mobile apps | ✅ | 🔶 a working Next.js web frontend exists (`frontend/`), click-tested through register → calculate → view-results in a real browser — no mobile apps, no guided-interview-style Q&A (it's a form-based flow), and Stripe Elements card entry itself is untested (no real test keys — see `frontend/README.md`) |
+| ELSTER submission | ✅ | 🔶 real `cffi` binding to the actual ERiC library, verified end-to-end — `EricCheckXML()` passes cleanly for a document combining wages, capital/rental/self-employment/children income, donations, church tax paid, AND a real Vorsatz cover-sheet block (Steuernummer converted via the real `EricMakeElsterStnr()`); `xml_builder.py` maps every real Anlage this project's data model supports; Finanzamt routing (`User.finanzamt_bufa_nummer`) is collected and wired through automatically; the approved `HerstellerID` (**`04505`**, assigned to "TaxEngine.de" specifically) is wired through `app/config.py`; the `eric-submitter` worker (`app/eric_submitter/worker.py` + an `eric_submission_jobs` queue table) is deployed as its own Railway service with `NativeEricClient` loading the real Linux `ericapi.dll` (`EricInitialisiere()`/`EricCheckXML()` both verified inside the deployed container) — `POST /tax-filings/{id}/submit` queues jobs onto it (`202 Accepted` + `GET /{id}/submission-job` polling); `submit_filing()`/`StubEricClient` remain only as directly-tested helpers, no route calls them. Everything needed for a real submission is now live; **no submission has actually been sent to a Finanzamt yet** — that first attempt is being treated deliberately carefully (small filing, reviewed XML, someone watching the worker's logs) |
+| Guided interview UX / mobile apps | ✅ | 🔶 a working Next.js web frontend exists (`frontend/`), deployed live at meinetaxengine.de, click-tested through register → onboarding → income (wage/capital/rental/self-employment) → deductions → calculate → view-results in a real browser — no mobile apps, no guided-interview-style Q&A (it's a form-based flow); a live PaymentElement-mounting bug was found and fixed in production (see `frontend/README.md`) but not yet re-verified live after the fix |
 | Document OCR (auto-read Lohnsteuerbescheinigung) | ✅ | ❌ |
 | Multi-language UI | ✅ (English for expats) | ❌ — English only, no i18n |
 | Frontend forms for capital gains / rental / self-employment / Kinderfreibetrag | ✅ | ✅ — added `filings/[id]/{capital-income,rental-income,self-employment}` pages plus an inline Kinderfreibetrag form; previously these had working backend routes with no UI at all |
@@ -41,7 +41,7 @@ corrected here.) Sources: [Taxfix — costs at a glance](https://taxfix.de/en/co
 
 ## What closed the gap
 
-Everything marked ✅ above is real, tested code — `backend/tests/` (220
+Everything marked ✅ above is real, tested code — `backend/tests/` (367
 unit tests, 100% `tax_engine` coverage) plus live end-to-end smoke tests
 against a real Dockerized Postgres for every feature, not just design
 notes. A few highlights:
@@ -76,24 +76,35 @@ notes. A few highlights:
   plus signature-verified webhook handling, with the exact HMAC
   verification algorithm exercised in tests (no live Stripe keys needed to
   prove the verification logic itself is correct).
-- **ERiC submission scaffold** (`app/eric/`) — real XML generation and a
-  full validate→submit→persist orchestration wired to
-  `POST /tax-filings/{id}/submit`, built against a `StubEricClient` since
-  the real `NativeEricClient` needs a BZSt developer certificate this
-  project doesn't have. The stub is explicit about what it is; it never
-  pretends to be a real government submission.
+- **ERiC submission** (`app/eric/`) — real XML generation and a full
+  validate→submit→persist orchestration; `POST /tax-filings/{id}/submit`
+  queues onto the `eric-submitter` worker, which is the only place the
+  real `NativeEricClient` (cffi binding to `ericapi.dll`/`.so`) is ever
+  instantiated, deliberately kept out of the FastAPI web process.
+  `StubEricClient` remains a real, directly-tested implementation used
+  for local dev/tests, not a placeholder standing in for something that
+  can't exist — the approved `HerstellerID` and a real ERiC developer
+  certificate mean `NativeEricClient` no longer needs anything this
+  project doesn't have.
 - **Frontend** (`frontend/`) — Next.js + TypeScript, the golden path end to
-  end (register → dashboard → add income/deductions → calculate → pay via
-  Stripe Elements → submit). Verified via a clean production build, clean
-  lint, and a real click-through in Chrome (register → dashboard → add
-  wage income → add a commute deduction → calculate → view the refund
-  breakdown), every displayed figure cross-checked against the backend's
-  own numbers. That browser session caught a real bug: an unhandled Stripe
-  API error reached FastAPI as a bare 500 with no CORS headers (Starlette's
+  end (register → onboarding → dashboard → add income/deductions →
+  calculate → pay via Stripe Elements → submit), plus profile editing and
+  legal pages (Impressum/Datenschutz/AGB/ELSTER privacy notice). Verified
+  via a clean production build, clean lint, and a real click-through in
+  Chrome (register → dashboard → add wage income → add a commute
+  deduction → calculate → view the refund breakdown), every displayed
+  figure cross-checked against the backend's own numbers. That browser
+  session caught a real bug: an unhandled Stripe API error reached
+  FastAPI as a bare 500 with no CORS headers (Starlette's
   `ServerErrorMiddleware` bypasses `CORSMiddleware` for unhandled
   exceptions), so the browser reported an opaque "Failed to fetch" instead
   of a usable error — fixed by explicitly catching `stripe.StripeError` in
-  `payment_service.py`, with a regression test.
+  `payment_service.py`, with a regression test. Now deployed live at
+  meinetaxengine.de on Railway, which caught two further production-only
+  bugs: `<PaymentElement>` silently never mounting (a mistyped character
+  in the live Stripe publishable key) and homepage edits not appearing
+  after deploy (Railway's edge cache doesn't purge on deploy the way
+  Vercel's does) — see `frontend/README.md` for both.
 - **Capital income / rental income / self-employment income / Kinderfreibetrag
   frontend forms** (`filings/[id]/{capital-income,rental-income,self-employment}`
   + the filing detail page's inline "Children" section) — these calculation
@@ -135,17 +146,21 @@ notes. A few highlights:
    project's `kindergeld_monthly_cents_per_child` constant turned out to
    be unused by any actual calculation, so the tiering doesn't affect
    correctness -- see that field's docstring).
-3. **A live `NativeEricClient` submission** — the client itself is real and
-   verified against the actual ERiC library (`EricCheckXML()` passes
-   cleanly for wage/capital/rental/self-employment/children income,
-   donations, church tax paid, and a real Vorsatz block, all together),
-   each filer's Finanzamt BuFa-Nummer is collected, and `POST
-   /tax-filings/{id}/submit` now queues onto the real `eric-submitter`
-   worker (`app/eric_submitter/worker.py`) -- the `HerstellerID` is now
-   approved (`04505`, see the ELSTER integration doc's Eleventh update),
-   so the ONLY remaining gap is pointing a real `ERIC_SDK_PATH` at a
-   running worker deployment. See `docs/ELSTER_ERIC_INTEGRATION.md` for
-   exactly what's left.
+3. **An actual completed submission to a real Finanzamt** — everything
+   needed for one is now live: `NativeEricClient` is verified against the
+   actual ERiC library (`EricCheckXML()` passes cleanly for wage/capital/
+   rental/self-employment/children income, donations, church tax paid,
+   and a real Vorsatz block, all together), each filer's Finanzamt
+   BuFa-Nummer is collected, the `HerstellerID` is approved (`04505`),
+   and `POST /tax-filings/{id}/submit` queues onto a real, deployed
+   `eric-submitter` worker (its own Railway service, `ERIC_SDK_PATH` set,
+   `EricInitialisiere()` verified against the real Linux library in that
+   deployed container). What hasn't happened yet is the first actual
+   `EricBearbeiteVorgang()` call reaching BZSt's servers for a real
+   filing — deliberately being treated with care (small filing, reviewed
+   XML, someone watching the worker's logs) rather than as a routine
+   deploy. See `docs/ELSTER_ERIC_INTEGRATION.md` for exactly where this
+   stands.
 4. **Smaller, explicitly-documented approximations** worth revisiting
    before this handles real filings: the §32d Abs. 6 EStG capital-gains
    Günstigerprüfung election, AfA depreciation schedules, Gewerbesteuer,
@@ -155,3 +170,13 @@ notes. A few highlights:
    what's still simplified is the Günstigerprüfung calculation itself,
    per `kinderfreibetrag.py`'s docstring), and the Kirchensteuer Kappung
    rate table's per-state-not-per-denomination simplification.
+5. **No frontend for the `/children` CRUD API and no automated frontend
+   tests.** The backend `/children` route, first-class
+   `app/models/child.py` entities, and their Anlage Kind XML mapping all
+   exist and work — a filer just can't reach them through the UI yet
+   (the frontend's inline "Kinderfreibetrag" input is only the plain
+   child *count* used by the Günstigerprüfung calculation, a separate
+   concern from these per-child identity records). Frontend verification
+   is real click-throughs (local and, for two bugs, live in production —
+   see `frontend/README.md`) plus `build`/`lint`/`tsc`, not an automated
+   test suite (no Jest/Playwright/Vitest set up).
