@@ -37,13 +37,23 @@ export function LedgerLine({
       className={`flex animate-rise-in items-baseline gap-2 py-2 ${isTotal ? "border-t border-paper-line mt-1 pt-3" : ""}`}
       style={{ animationDelay: `${delay}ms` }}
     >
+      {/* The label is the side that gives: `min-w-0` lets it shrink below
+          its content width (flex items refuse to by default) and `truncate`
+          ellipsises what is left over, with the full text on `title` so
+          nothing becomes unreachable. The AMOUNT never shrinks or wraps --
+          a half-shown figure in a money column is worse than useless -- so
+          it keeps `whitespace-nowrap` and gets `shrink-0`. Measured: a
+          realistic address ("Musterstraße 123, 10115 Berlin-Prenzlauer
+          Berg") needed 400px in the 311px a 375px phone actually leaves
+          inside a p-8 tile, and overflowed the row before this. */}
       <span
-        className={`whitespace-nowrap text-sm ${isTotal ? "font-medium text-ink" : "text-ink/60"}`}
+        title={label}
+        className={`min-w-0 truncate text-sm ${isTotal ? "font-medium text-ink" : "text-ink/60"}`}
       >
         {label}
       </span>
       <span
-        className="mb-[4px] h-[3px] flex-1 self-end"
+        className="mb-[4px] h-[3px] min-w-3 flex-1 self-end"
         style={{
           backgroundImage: "radial-gradient(circle, var(--color-ink) 1px, transparent 1.3px)",
           backgroundSize: "6px 3px",
@@ -54,7 +64,7 @@ export function LedgerLine({
         aria-hidden
       />
       <span
-        className={`tabular whitespace-nowrap ${isTotal ? "text-lg font-medium" : "text-sm"} ${valueColor}`}
+        className={`tabular shrink-0 whitespace-nowrap ${isTotal ? "text-lg font-medium" : "text-sm"} ${valueColor}`}
       >
         {value}
       </span>

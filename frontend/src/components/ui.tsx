@@ -140,17 +140,26 @@ export function Eyebrow({
   );
 }
 
+/** UI chrome is English (the app is `lang="en"` and aimed at expats --
+ * see the root README); German is reserved for terms that ARE the German
+ * thing being named: form and Anlage names, statutory concepts
+ * (Werbungskosten, Entfernungspauschale, Anlage KAP), and the legally
+ * German pages (Impressum/Datenschutz/AGB). These labels used to be
+ * German and sat directly beside their own English headings -- "Kapital"
+ * next to "Capital income" -- which read as unfinished rather than as
+ * flavour. The "Zeile" numbering on the landing page is deliberate German
+ * flavour and stays: it labels the tax form's own line numbers. */
 const CATEGORY_TAB: Record<string, { label: string; dot: string; text: string; bg: string }> = {
-  wage: { label: "Lohn", dot: "bg-brass", text: "text-brass", bg: "bg-brass-soft/20" },
-  capital: { label: "Kapital", dot: "bg-indigo", text: "text-indigo", bg: "bg-indigo-soft/20" },
-  rental: { label: "Miete", dot: "bg-sage", text: "text-sage", bg: "bg-sage-soft" },
+  wage: { label: "Wage", dot: "bg-brass", text: "text-brass", bg: "bg-brass-soft/20" },
+  capital: { label: "Capital", dot: "bg-indigo", text: "text-indigo", bg: "bg-indigo-soft/20" },
+  rental: { label: "Rental", dot: "bg-sage", text: "text-sage", bg: "bg-sage-soft" },
   self_employment: {
-    label: "Selbstständig",
+    label: "Self-employed",
     dot: "bg-terracotta",
     text: "text-terracotta",
     bg: "bg-terracotta-soft/20",
   },
-  children: { label: "Kinder", dot: "bg-mauve", text: "text-mauve", bg: "bg-mauve-soft/20" },
+  children: { label: "Children", dot: "bg-mauve", text: "text-mauve", bg: "bg-mauve-soft/20" },
 };
 
 /** A small colored tab marking which income category a section belongs
@@ -189,7 +198,8 @@ export function ErrorBanner({ message }: { message: string }) {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Entwurf",
+  // English, like every other status here -- see CATEGORY_TAB's note.
+  DRAFT: "Draft",
   CALCULATED: "Calculated",
   FEE_PAID: "Fee paid",
   SUBMITTED: "Submitted",
