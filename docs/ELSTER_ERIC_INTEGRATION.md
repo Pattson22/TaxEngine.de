@@ -913,3 +913,211 @@ enabled. Existing users who onboarded before this existed are routed
 back to a lightweight one-checkbox version of the same step (not the
 full form again — `isBasicProfileComplete()` distinguishes the two
 cases) the next time `isProfileComplete()` is checked.
+
+## 9. Belegabruf / Vorausgefüllte Steuererklärung (VaSt) — design (not yet implemented)
+
+This section scopes retrieving a filer's data *from* the Finanzamt
+instead of asking them to type it. Nothing below is built — no
+migration, no new bindings, no route. As in §7, every ERiC signature,
+`Verfahren`/`DatenArt` value and XML shape here is copied verbatim from
+the local SDK (ERiC 44.2.4.0, documentation 44.2.4.1), not recalled: the
+sources are `include/ericapi.h` and
+`Dokumentation/Datenarten/ElsterDatenabholung/`.
+
+Why this is worth scoping ahead of the other open items: it is the only
+remaining feature that materially changes the funnel rather than
+widening coverage. Today a filer hand-types a Lohnsteuerbescheinigung;
+with VaSt the same filing starts pre-populated from the authoritative
+source, with no transcription errors possible. It is also the piece this
+project is uniquely positioned to build — it needs a certified ERiC
+integration and a registered HerstellerID, both of which already exist
+here (see the Eleventh update) and neither of which a new entrant
+acquires quickly.
+
+### 9.1 It exists in the SDK, and it is not a new transport
+
+`ElsterDatenabholung` is a full Verfahren in the Datenartenkatalog, and
+`ElsterVaStDaten` is the DatenArt under it carrying the vorausgefüllte
+Steuererklärung. The decisive scoping fact is what is *absent*: grepping
+every exported symbol in `ericapi.h` turns up no retrieval entry point —
+no `EricHoleDaten`, no `EricAbholung`. Retrieval rides the same
+`EricBearbeiteVorgang()` this project already calls for submission,
+differing only in the TransferHeader's `Verfahren`/`DatenArt` and in the
+Nutzdaten payload.
+
+So `NativeEricClient`'s existing transport is already the right
+transport, and the only genuinely new binding is one function:
+
+```c
+int EricDekodiereDaten(
+    EricZertifikatHandle zertifikatHandle,
+    const byteChar* pin,
+    const byteChar* base64Eingabe,
+    EricRueckgabepufferHandle rueckgabePuffer);
+```
+
+Its own header documentation names the exact use case ("Base64-kodierte
+verschlüsselte Daten oder Anhänge, welche mit dem Verfahren
+ElsterDatenabholung abgeholt wurden") and the exact XPath the payload
+sits at:
+`/Elster[1]/DatenTeil[1]/Nutzdatenblock/Nutzdaten[1]/Datenabholung[1]/Abholung[1]/Datenpaket`
+(attachments, when present, at `.../Anhaenge[1]/Anhang[1]/Dateiinhalt`).
+
+### 9.2 The protocol is two round trips, then a local decrypt
+
+From the SDK's own examples under `ElsterVaStDaten/Beispiele/`, with the
+request payloads reproduced verbatim:
+
+1. **Anfrage** — ask what exists for one taxpayer and year:
+
+   ```xml
+   <Datenabholung xmlns="http://finkonsens.de/elster/elsterdatenabholung/v3" version="32">
+       <Anfrage idnr="00153674828" veranlagungsjahr="2020"/>
+   </Datenabholung>
+   ```
+
+   The response lists each available document as an `<Id>` carrying
+   `id`, `groesse`, `belegart`, `schemaversion` and `hashwert`.
+   `belegart` is also accepted as a filter attribute on `Anfrage`
+   (`AnfrageCType` in `Schema/32/datenabholung_32.xsd`), so a narrow
+   "just the Lohnsteuerbescheinigung" first release is expressible in
+   the protocol itself rather than filtered client-side.
+
+2. **Abholung** — fetch one document by that id:
+
+   ```xml
+   <Abholung id="vb3036bnv4cpx523cohjzjf3bkzkpw5f" idnr="00153674828" veranlagungsjahr="2021"/>
+   ```
+
+   The response carries the encrypted `<Datenpaket>`.
+
+3. **Decrypt locally** via `EricDekodiereDaten()` with the taxpayer's
+   certificate handle and PIN, then parse the result against the
+   per-year Belegart schemas in `VaSt-Belege/Schema/<Jahr>/`.
+
+Both round trips use `<Vorgang>send-Auth</Vorgang>` in the sample
+TransferHeaders — not the `send-NoSig` this project submits with today.
+
+### 9.3 It is hard-blocked on §7, not merely adjacent to it
+
+`send-Auth`, plus an `EricZertifikatHandle` + PIN on the decrypt call,
+means Belegabruf cannot ship before AUTHENTIFIZIERT mode: it needs the
+taxpayer's own `.pfx` and PIN, the certificate-handle lifecycle of §7.1,
+and the storage/transfer/retention decisions of §7.4–§7.6. There is no
+KOMPRIMIERT-style fallback either — unlike submission, where a paper
+cover sheet substitutes for a signature, nothing substitutes for
+authentication when the request is "give me this person's tax data".
+
+The upside of that dependency: §7 stops being a UX nicety (paperless
+filing) and becomes the enabler for the highest-leverage feature on the
+roadmap. If §7 is built anyway, VaSt is a comparatively small increment
+on top — one new binding, one builder/parser pair, no new trust
+boundary.
+
+### 9.4 What actually comes back, and where it would land
+
+The Belegarten below are the `VaSt_*` schema roots in
+`VaSt-Belege/Schema/2024/`. Meanings are read off each schema's own
+element names rather than inferred from the abbreviations:
+
+| Belegart | Identified by | Lands in |
+|---|---|---|
+| `VaSt_LStB` | `Besteuerungsmerkmal_ELStAM_Steuerklasse`, plus the example's own `belegart` attribute | `WageTaxCertificate` — direct hit, and the biggest single data-entry burden in the product |
+| `VaSt_KRV` | `Beitragsdaten`, `BetragArt` | `deductions/vorsorgeaufwand.py` — already modeled |
+| `VaSt_RIE` | `Anbieternummer`, `BeitragsDaten` | Altersvorsorge (Riester) — partially modeled |
+| `VaSt_RUE` | `Beitragsdaten`, `Meldejahr` | Altersvorsorge (Basisrente/Rürup) — partially modeled |
+| `VaSt_RBM` | `Mitteilung_Leistung_Teilleistung_Rentenart` | Pension income — **not modeled** |
+| `VaSt_LErsL` | `Leistung`, `LeistungsEmpfaenger`, `LeistungsPflichtiger` | Lohnersatzleistungen — **not modeled** (see below) |
+| `VaSt_GDB` | literal element `GradDerBehinderung`, `FeststellungsDat` | Behinderten-Pauschbetrag — **not modeled** (see below) |
+| `VaSt_FSA` | `BIC`, `BLZ`, `Institut`, `Ehegatte` | Freistellungsauftrag → Sparer-Pauschbetrag context |
+| `VaSt_VWL` | `AnlageArt`, `EndeSperrfrist` | Vermögenswirksame Leistungen — not modeled |
+| `VaSt_ZUS` | `Behoerde`, `Beginn`/`Ende` | **Unconfirmed** — expansion not established from the schema |
+| `VaSt_Pers1` / `VaSt_Pers2` | — | Filer/spouse identity → `User` profile |
+
+Two of these retrieve data the engine has nowhere to put, which is a
+real finding rather than a footnote:
+
+- **`VaSt_LErsL` (Lohnersatzleistungen)** feeds the Progressionsvorbehalt
+  of §32b EStG — benefits that are themselves tax-free but raise the
+  rate applied to everything else. Grepping the engine, "Progression"
+  appears only as the names of the §32a *tariff zones* in
+  `tax_brackets.py`; §32b is entirely unmodeled. Retrieving an
+  Arbeitslosengeld or Elterngeld figure and silently dropping it would
+  understate the assessed tax — worse than not retrieving it at all.
+- **`VaSt_GDB`** feeds the Behinderten-Pauschbetrag, which
+  `deductions/aussergewoehnliche_belastungen.py`'s own module docstring
+  already flags as deliberately out of scope (§33b replaces rather than
+  supplements the §33 mechanism it implements).
+
+So the honest sequencing is: `VaSt_LStB` + `VaSt_KRV` first — both land
+in models that already exist and already calculate correctly — and treat
+`LErsL`/`GDB` as *engine* work that must precede retrieving them, not as
+parsing work.
+
+The per-Belegart, per-year field mappings live in
+`Zuordnungsinformationen/ESt_<Jahr>/Jahresdokumentation_VaSt_*.ods` — the
+same spreadsheet format this project already used to map the E10 fields
+in `xml_builder.py`, so the mapping work is a known quantity rather than
+new research.
+
+### 9.5 Code paths that would change
+
+- `native_bindings.py`: add `EricDekodiereDaten` to `_CDEF`, alongside
+  §7.3's certificate-handle additions, which it depends on.
+- `client.py`: a retrieval counterpart to `submit()` — request, fetch,
+  decrypt — still instantiated only inside the worker process.
+- A new `app/eric/vast/` alongside `xml_builder.py`: builders for the
+  `Anfrage`/`Abholung` payloads and parsers per supported Belegart
+  schema, kept ERiC-free and unit-testable exactly as `xml_builder.py`
+  is.
+- `eric_submitter/worker.py` (or a sibling worker): retrieval is another
+  out-of-process job, for the same reason submission is. It differs in
+  being *user-initiated and latency-visible*, so whether it shares the
+  `eric_submission_jobs` queue or gets its own table is a real decision,
+  not a detail.
+- New model + migration for retrieved documents, and an import step that
+  is explicitly **review-then-accept**, never a silent overwrite: the
+  filer must see what came back and confirm it before it becomes their
+  declared figures. They remain legally responsible for the return.
+- Frontend: a "fetch my data from the Finanzamt" entry point early in
+  the flow, plus the review/confirm screen above.
+
+### 9.6 Deliberately NOT in scope here
+
+The sibling Datenarten under `ElsterDatenabholung/` —
+`PostfachAnfrage`/`PostfachStatus`/`PostfachBestaetigung` (the ELSTER
+Postfach) and `Statusabfrage`/`Bereitstellungen` — are the machinery
+Bescheiddatenabruf (retrieving the *assessment*) would use, and by
+extension Einspruch. They share this transport and get much cheaper once
+VaSt exists, but they are a separate feature with their own legal
+semantics; §2's note that Einspruch depends on Bescheiddatenabruf
+existing first still stands.
+
+### 9.7 Open questions before implementation starts
+
+- **Does the taxpayer have to pre-activate VaSt retrieval, and does a
+  third-party product need a separate Abrufberechtigung?** The
+  `datenabholung_32.xsd` protocol carries no authorization element — as
+  far as the schema is concerned the certificate *is* the authorization
+  — but whether ELSTER requires the taxpayer to switch Belegabruf on in
+  their own account, or to grant this product a retrieval permission, is
+  a portal/business question the schema cannot answer. That
+  `ElsterVollmachtDB` exists as its own Verfahren suggests a formal
+  representation mechanism worth understanding before committing to a
+  UX. Resolve against `Dokumentation/ElsterDatenabholung-v32.pdf` and
+  the Entwicklerhandbuch — neither was readable in this pass, as no PDF
+  text extraction was available in the environment this was scoped in.
+- **Test path.** The sample TransferHeaders carry
+  `<Testmerker>700000004</Testmerker>`, and the SDK ships
+  `Testszenarien_2022..2025.ods` under `VaSt-Belege/`. Whether those
+  scenarios can be exercised end-to-end *without* a real taxpayer
+  certificate is the first thing to establish: it decides whether this
+  and §7 can be built in parallel or strictly in sequence.
+- **`VaSt_ZUS`'s meaning**, per the table above.
+- **Retention of retrieved data.** It arrives as authoritative,
+  government-sourced records about a person. §7.6 already set a
+  minimize-what-is-kept precedent for certificates, and
+  `app/retention/purge_expired_data.py` already exists. Whether
+  retrieved Belege are kept at all after import, or discarded once their
+  figures are accepted, is better decided before the model is designed
+  than retrofitted afterwards.
