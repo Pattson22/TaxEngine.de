@@ -75,6 +75,90 @@ export default function Home() {
           </Zeile>
         </div>
       </section>
+
+      {/* Trust section. Every claim here is a checkable fact about how the
+          product works -- the ELSTER manufacturer ID is a real registration,
+          the fee really is charged only at submission, and the scope
+          limitation is a genuine constraint we operate under rather than
+          marketing modesty. Deliberately NO social proof: no user counts, no
+          testimonials, no average-refund figure, no security badges. This
+          product has not filed at volume yet, and inventing a track record
+          on a page that asks strangers for their tax data would be exactly
+          the wrong trade. When there is real data, it belongs here. */}
+      <section className="border-t border-ink/8 bg-paper-dim/40">
+        <div className="mx-auto max-w-5xl px-6 py-20">
+          <h2 className="font-display text-[26px] leading-tight font-medium tracking-tight text-ink">
+            Before you hand over your tax data
+          </h2>
+          <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-ink/55">
+            Reasonable things to want to know about anyone asking for it.
+          </p>
+
+          <div className="mt-12 grid gap-x-12 gap-y-10 sm:grid-cols-2">
+            <Fact label="ELSTER" title="A registered ELSTER manufacturer">
+              Returns are transmitted with ERiC, the tax administration&apos;s own
+              certified submission library — not by scraping a form. Doing that
+              at all requires a manufacturer ID issued through ELSTER&apos;s
+              developer registration; ours is{" "}
+              <span className="tabular text-ink/75">04505</span>, held in the
+              name TaxEngine.de.
+            </Fact>
+
+            <Fact label="Price" title="Nothing is charged until you file">
+              Entering income, claiming deductions and seeing your calculated
+              figure all cost nothing. The €34,90 is taken at the moment you
+              choose to file, once — no subscription, no per-Anlage pricing, and
+              no charge if you decide the number isn&apos;t worth filing.
+            </Fact>
+
+            <Fact label="Control" title="Nothing is sent until you send it">
+              Your return sits as a draft for as long as you want. It reaches
+              the Finanzamt only when you press submit, and you see the exact
+              figures being declared beforehand — this never files on your
+              behalf in the background.
+            </Fact>
+
+            <Fact label="Scope" title="Software, not a Steuerberater">
+              We are tax-preparation software operating under the
+              Steuerberatungsgesetz&apos;s software provision, which means we
+              calculate and file what you enter but do not advise you on it. For
+              a genuinely complicated situation, a Steuerberater is the right
+              call and we will not pretend otherwise.
+            </Fact>
+          </div>
+
+          <p className="mt-12 border-t border-ink/8 pt-6 text-sm text-ink/50">
+            What we store, where it is hosted and how long we keep it is set out
+            in the{" "}
+            <Link href="/datenschutz" className="text-ink/70 underline underline-offset-4 hover:text-ink">
+              Datenschutzerklärung
+            </Link>
+            , the terms in the{" "}
+            <Link href="/agb" className="text-ink/70 underline underline-offset-4 hover:text-ink">
+              AGB
+            </Link>
+            .
+          </p>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Fact({
+  label,
+  title,
+  children,
+}: {
+  label: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <span className="font-mono text-xs tracking-wide text-brass uppercase">{label}</span>
+      <h3 className="mt-2 font-display text-lg font-medium text-ink">{title}</h3>
+      <p className="mt-2 text-[14px] leading-relaxed text-ink/55">{children}</p>
     </div>
   );
 }
