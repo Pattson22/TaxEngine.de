@@ -33,7 +33,7 @@ corrected here.) Sources: [Taxfix — costs at a glance](https://taxfix.de/en/co
 | Kinderfreibetrag vs. Kindergeld Günstigerprüfung | ✅ | ✅ (the calculation itself still treats children as a plain count — see `kinderfreibetrag.py`; children ARE first-class `app/models/child.py` entities for ELSTER submission identity data) |
 | Real payment integration | ✅ | ✅ (Stripe PaymentIntent + verified webhook) |
 | ELSTER submission | ✅ | 🔶 real `cffi` binding to the actual ERiC library, verified end-to-end — `EricCheckXML()` passes cleanly for a document combining wages, capital/rental/self-employment/children income, donations, church tax paid, AND a real Vorsatz cover-sheet block (Steuernummer converted via the real `EricMakeElsterStnr()`); `xml_builder.py` maps every real Anlage this project's data model supports; Finanzamt routing (`User.finanzamt_bufa_nummer`) is collected and wired through automatically; the approved `HerstellerID` (**`04505`**, assigned to "TaxEngine.de" specifically) is wired through `app/config.py`; the `eric-submitter` worker (`app/eric_submitter/worker.py` + an `eric_submission_jobs` queue table) is deployed as its own Railway service with `NativeEricClient` loading the real Linux `ericapi.dll` (`EricInitialisiere()`/`EricCheckXML()` both verified inside the deployed container) — `POST /tax-filings/{id}/submit` queues jobs onto it (`202 Accepted` + `GET /{id}/submission-job` polling); `submit_filing()`/`StubEricClient` remain only as directly-tested helpers, no route calls them. Everything needed for a real submission is now live; **no submission has actually been sent to a Finanzamt yet** — that first attempt is being treated deliberately carefully (small filing, reviewed XML, someone watching the worker's logs) |
-| Guided interview UX / mobile apps | ✅ | 🔶 a working Next.js web frontend exists (`frontend/`), deployed live at meinetaxengine.de, click-tested through register → onboarding → income (wage/capital/rental/self-employment) → deductions → calculate → view-results in a real browser — no mobile apps, no guided-interview-style Q&A (it's a form-based flow); a live PaymentElement-mounting bug was found and fixed in production (see `frontend/README.md`) but not yet re-verified live after the fix |
+| Guided interview UX / mobile apps | ✅ | 🔶 a working Next.js web frontend exists (`frontend/`), deployed live at meinetaxengine.de, click-tested through register → onboarding → income (wage/capital/rental/self-employment) → deductions → calculate → view-results in a real browser — no mobile apps, no guided-interview-style Q&A (it's a form-based flow); a live PaymentElement-mounting bug was found and fixed in production, since re-verified in a real browser against production (see `frontend/README.md`) |
 | Document OCR (auto-read Lohnsteuerbescheinigung) | ✅ | ❌ |
 | Multi-language UI | ✅ (English for expats) | ❌ — English only, no i18n |
 | Frontend forms for capital gains / rental / self-employment / Kinderfreibetrag | ✅ | ✅ — added `filings/[id]/{capital-income,rental-income,self-employment}` pages plus an inline Kinderfreibetrag form; previously these had working backend routes with no UI at all |
@@ -122,15 +122,25 @@ notes. A few highlights:
 ## What's still a real gap
 
 1. **Guided interview-style UX, mobile apps, document OCR/photo upload,
-   multi-language UI, ELSTER prefill (Vorausgefüllte Steuererklärung /
-   Belegabruf)** — the current frontend is a straightforward form-based
-   flow (every income/deduction type now has its own add-form, per the
-   table above), not a guided Q&A interview, and has no mobile app,
-   document scanning, i18n, or ELSTER data-prefill integration. This is
-   still the largest remaining gap. OCR and ELSTER prefill in particular
-   require infrastructure (an OCR service, a real ELSTER Belegabruf
-   integration) this project doesn't have — not attempted here.
-2. ~~**Retroactive filing for prior tax years**~~ — CLOSED. `2022` and
+   multi-language UI** — the current frontend is a straightforward
+   form-based flow (every income/deduction type now has its own
+   add-form, per the table above), not a guided Q&A interview, and has
+   no mobile app, document scanning or i18n. The language position is
+   currently mixed rather than chosen: an English UI with German labels
+   throughout ("Bearbeitungsgebühr", "Sie zahlen nach"), which serves
+   neither the mass German market nor the expat niche Taxfix targets as
+   well as committing to one would.
+2. **ELSTER prefill (Vorausgefüllte Steuererklärung / Belegabruf)** —
+   no longer unscoped: §9 of `docs/ELSTER_ERIC_INTEGRATION.md` designs
+   it against the real SDK. The headline finding is that it needs far
+   less new infrastructure than assumed — retrieval reuses the same
+   `EricBearbeiteVorgang()` transport as submission plus exactly one new
+   binding — but is hard-blocked on AUTHENTIFIZIERT mode (§7), since
+   every retrieval round trip is `send-Auth`. This is the single
+   biggest lever on conversion and the one competitors can't cheaply
+   copy, since it presupposes a certified ERiC integration and a
+   registered HerstellerID.
+3. ~~**Retroactive filing for prior tax years**~~ — CLOSED. `2022` and
    `2023` now have reviewed `TaxYearConstants` entries alongside `2024`
    (`tax_engine/constants.py`), matching Taxfix's 2022–2025 range except
    for 2025 itself (still pending final BMF bracket coefficients, see
@@ -146,7 +156,7 @@ notes. A few highlights:
    project's `kindergeld_monthly_cents_per_child` constant turned out to
    be unused by any actual calculation, so the tiering doesn't affect
    correctness -- see that field's docstring).
-3. **An actual completed submission to a real Finanzamt** — everything
+4. **An actual completed submission to a real Finanzamt** — everything
    needed for one is now live: `NativeEricClient` is verified against the
    actual ERiC library (`EricCheckXML()` passes cleanly for wage/capital/
    rental/self-employment/children income, donations, church tax paid,
@@ -161,7 +171,7 @@ notes. A few highlights:
    XML, someone watching the worker's logs) rather than as a routine
    deploy. See `docs/ELSTER_ERIC_INTEGRATION.md` for exactly where this
    stands.
-4. **Smaller, explicitly-documented approximations** worth revisiting
+5. **Smaller, explicitly-documented approximations** worth revisiting
    before this handles real filings: the §32d Abs. 6 EStG capital-gains
    Günstigerprüfung election, AfA depreciation schedules, Gewerbesteuer,
    partial-year Kinderfreibetrag eligibility and the non-custodial-parent
@@ -170,7 +180,7 @@ notes. A few highlights:
    what's still simplified is the Günstigerprüfung calculation itself,
    per `kinderfreibetrag.py`'s docstring), and the Kirchensteuer Kappung
    rate table's per-state-not-per-denomination simplification.
-5. **No frontend for the `/children` CRUD API and no automated frontend
+6. **No frontend for the `/children` CRUD API and no automated frontend
    tests.** The backend `/children` route, first-class
    `app/models/child.py` entities, and their Anlage Kind XML mapping all
    exist and work — a filer just can't reach them through the UI yet

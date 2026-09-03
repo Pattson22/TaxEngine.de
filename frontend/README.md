@@ -44,6 +44,7 @@ src/
 ├── components/
 │   ├── ui.tsx               Button/Input/Select/Card/StatusStamp/Tooltip/etc.
 │   ├── ledger.tsx            Ledger/LedgerLine/CountUpEuro — see Design below
+│   ├── hero-form-backdrop.tsx  Drawn German tax form behind the homepage hero
 │   ├── refund-anchor.tsx     The one dedicated home for the live refund/liability figure
 │   ├── bento.tsx             Asymmetrical Bento Grid for the tax-pillar summary
 │   ├── slide-over.tsx        Low-contrast slide-over for tax-code explanations
@@ -96,6 +97,17 @@ look (no cream+serif, no near-black+neon, no newspaper hairlines):
 - **"Zeile"** — the landing page's 3-step process section is numbered the
   way a German tax form numbers its lines, not with generic numbered
   circles.
+- **The hero backdrop is drawn, not photographed**
+  (`components/hero-form-backdrop.tsx`) — an SVG German tax form: real
+  Anlage N field names, Zeile numbers in the left margin, the EUR|Ct
+  split German amount fields use, and per-digit boxes matching
+  `tax-form-boxes.tsx`. It replaced a stock photo that turned out to be
+  a US IRS Form 1040 with dollar-denominated standard deductions, which
+  is a strange thing to put behind the headline of a service that files
+  with a German Finanzamt. Drawing it also costs no image payload and
+  stays crisp at any width; see that file's header comment for the two
+  layout constraints (full-bleed rows, left-anchored crop) that the
+  browser caught and reasoning alone did not.
 - **Premium redesign rules** (`components/refund-anchor.tsx`,
   `bento.tsx`, `slide-over.tsx`): one dedicated, unmissable home for the
   live refund/liability figure (`RefundAnchor`) that everything else
@@ -166,8 +178,14 @@ look (no cream+serif, no near-black+neon, no newspaper hairlines):
   with a 401), which had no visible symptom because `<PaymentElement>`
   had no `onLoadError` handler; the key has been corrected in Railway's
   variable store and the component now surfaces load errors instead of
-  hanging on "Loading..." forever — not yet re-verified live after the
-  key fix. A homepage caching bug was also found and fixed this way:
+  hanging on "Loading..." forever. Since re-verified against production
+  in a real browser: the card form mounts and renders correctly, with
+  `onReady` firing and the submit button enabling as designed. (Worth
+  knowing for the next person who checks: at full-page screenshot
+  resolution the mounted Stripe iframe looks like an empty box —
+  Stripe's placeholder text is light grey on near-white. Zoom in, or
+  inspect the iframe's dimensions, before concluding it is broken.) A
+  homepage caching bug was also found and fixed this way:
   Railway's edge, unlike Vercel, doesn't purge its cache on deploy, so
   `export const dynamic = "force-dynamic"` was added to the homepage so
   edits show up immediately.
