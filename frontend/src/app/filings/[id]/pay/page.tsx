@@ -147,7 +147,15 @@ function CheckoutForm({ filingId }: { filingId: string }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && <ErrorBanner message={error} />}
-      <PaymentElement onReady={() => setIsElementReady(true)} />
+      {/* onLoadError matters: without it, a bad publishable key or other
+          mount failure fails completely silently -- no console output, no
+          iframe, the button stuck on "Loading..." forever. Confirmed live:
+          this exact failure mode is how a one-character typo in the live
+          publishable key went undetected across the mount for a long time. */}
+      <PaymentElement
+        onReady={() => setIsElementReady(true)}
+        onLoadError={(event) => setError(event.error.message ?? "Couldn't load the payment form.")}
+      />
       <Button
         type="submit"
         disabled={!stripe || !isElementReady || isSubmitting}
