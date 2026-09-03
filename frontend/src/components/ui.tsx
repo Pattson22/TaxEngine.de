@@ -191,7 +191,13 @@ export function PageHeading({ title, subtitle }: { title: string; subtitle?: str
 
 export function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="mb-5 border-l-2 border-clay bg-clay-soft px-4 py-3 text-sm text-clay">
+    // role="alert" carries an implicit aria-live="assertive": a failed
+    // calculation, payment or submission is worth interrupting for, and it
+    // is otherwise signalled only by colour and position.
+    <div
+      role="alert"
+      className="mb-5 border-l-2 border-clay bg-clay-soft px-4 py-3 text-sm text-clay"
+    >
       {message}
     </div>
   );

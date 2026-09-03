@@ -36,6 +36,16 @@ import type {
 
 const SUBMISSION_POLL_INTERVAL_MS = 3000;
 
+// Only these two statuses may be recalculated automatically. This is a
+// correctness guard, not a style choice: calculate_tax_filing() sets status
+// back to CALCULATED unconditionally, so auto-running it on a FEE_PAID
+// filing would silently discard the record that the fee was paid (and block
+// submission, which requires FEE_PAID); on a SUBMITTED/ACCEPTED/REJECTED
+// filing it deliberately BEGINS AN AMENDMENT, clearing the Transferticket.
+// Neither may happen merely because someone opened the page. Those states
+// keep the explicit "Recalculate" button, where the filer is choosing it.
+const AUTO_RECALCULABLE_STATUSES = ["DRAFT", "CALCULATED"];
+
 export default function FilingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { token, isLoading: authLoading } = useRequireOnboarding();
@@ -70,7 +80,7 @@ export default function FilingDetailPage() {
   }, []);
 
   const loadAll = useCallback(async () => {
-    if (!token) return;
+    if (!token) return null;
     const loadedFiling = await getTaxFiling(token, id);
     setFiling(loadedFiling);
     const [certs, deds, capital, rental, selfEmp, jobs] = await Promise.all([
@@ -87,6 +97,11 @@ export default function FilingDetailPage() {
     setRentalIncome(rental);
     setSelfEmployment(selfEmp);
     setSubmissionHistory(jobs);
+    return {
+      filing: loadedFiling,
+      hasIncome:
+        certs.length > 0 || capital.length > 0 || rental.length > 0 || selfEmp.length > 0,
+    };
   }, [token, id]);
 
   useEffect(() => {
@@ -94,9 +109,33 @@ export default function FilingDetailPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     loadAll()
+      .then(async (loaded) => {
+        // Keep the headline figure current on its own, so the landing
+        // page's promise ("watch the number update as you go") holds:
+        // income and deductions are each entered on their own page and the
+        // filer returns HERE afterwards, so recalculating on arrival means
+        // the number always reflects what they just entered without them
+        // having to know to press a button. /calculate is deterministic
+        // for a given set of rows, so re-running it is idempotent -- which
+        // also makes this correct for DELETIONS, where no timestamp
+        // comparison would have noticed anything changed.
+        if (!loaded || !loaded.hasIncome) return;
+        if (!AUTO_RECALCULABLE_STATUSES.includes(loaded.filing.status)) return;
+        setIsCalculating(true);
+        try {
+          const updated = await calculateTaxFiling(token, id);
+          if (isMountedRef.current) setFiling(updated);
+        } catch {
+          // Deliberately silent: this is a background refresh the filer
+          // never asked for, and the figure already on screen is the last
+          // good one. The explicit Calculate button surfaces real errors.
+        } finally {
+          if (isMountedRef.current) setIsCalculating(false);
+        }
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Couldn't load this return."))
       .finally(() => setIsLoading(false));
-  }, [token, loadAll]);
+  }, [token, id, loadAll]);
 
   async function handleCalculate() {
     if (!token) return;
@@ -431,7 +470,11 @@ export default function FilingDetailPage() {
             <h2 className="font-display text-sm font-medium tracking-[0.08em] text-ink/70 uppercase">
               Calculation
             </h2>
-            <Button onClick={handleCalculate} disabled={!canCalculate || isCalculating}>
+            <Button
+                onClick={handleCalculate}
+                disabled={!canCalculate || isCalculating}
+                aria-busy={isCalculating}
+              >
               {isCalculating ? "Calculating…" : isCalculated ? "Recalculate" : "Calculate refund"}
             </Button>
           </div>
@@ -546,7 +589,7 @@ export default function FilingDetailPage() {
               Submission
             </h2>
             {filing.elster_transfer_ticket ? (
-              <div className="mt-3 text-sm text-ink/60">
+              <div className="mt-3 text-sm text-ink/60" aria-live="polite">
                 <p className="tabular">Transfer ticket: {filing.elster_transfer_ticket}</p>
                 {filing.elster_accepted_at && (
                   <p className="mt-1.5 text-sage">Accepted by the Finanzamt.</p>
@@ -557,7 +600,11 @@ export default function FilingDetailPage() {
               </div>
             ) : (
               <div className="mt-3">
-                <p className="text-sm text-ink/45">
+                {/* Polled every 3s (SUBMISSION_POLL_INTERVAL_MS) and swapped
+                    in place, so without a live region a screen-reader user
+                    gets no signal that a submission moved from queued to
+                    processing to done. */}
+                <p className="text-sm text-ink/45" aria-live="polite">
                   {submissionJob?.status === "PROCESSING"
                     ? "The eric-submitter worker is processing this now…"
                     : submissionJob?.status === "PENDING"
@@ -566,7 +613,7 @@ export default function FilingDetailPage() {
                         ? "Fee paid — ready to submit your amended return."
                         : "Fee paid — ready to submit."}
                 </p>
-                <Button className="mt-3" onClick={handleSubmit} disabled={isSubmitting}>
+                <Button className="mt-3" onClick={handleSubmit} disabled={isSubmitting} aria-busy={isSubmitting}>
                   {isSubmitting ? "Submitting…" : "Submit to the Finanzamt"}
                 </Button>
               </div>
@@ -611,12 +658,14 @@ export default function FilingDetailPage() {
                     variant="secondary"
                     onClick={handleDownloadCoverSheet}
                     disabled={isDownloadingCoverSheet}
+                    aria-busy={isDownloadingCoverSheet}
                   >
                     {isDownloadingCoverSheet ? "Preparing…" : "Download cover sheet"}
                   </Button>
                   <Button
                     onClick={handleMarkMailed}
                     disabled={isMarkingMailed || !filing.cover_sheet_generated_at}
+                    aria-busy={isMarkingMailed}
                   >
                     {isMarkingMailed ? "Saving…" : "I've mailed it"}
                   </Button>
