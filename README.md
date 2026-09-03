@@ -273,16 +273,27 @@ deliberately pointed at its own dedicated database (`taxengine_live`, kept
 strictly separate from the DB used for routine dev/browser testing) so a
 leftover test row can never be submitted to a real Finanzamt.
 
-Real deployment infrastructure exists: `backend/Dockerfile` (same image
-serves the FastAPI process and, via a different `command:`, the
-`eric-submitter` worker — neither bakes in the ERiC SDK, which is
-bind-mounted via `ERIC_SDK_PATH` at container runtime),
-`frontend/Dockerfile` (Next.js standalone build), `docker-compose.yml`
-(worker behind a `worker` Compose profile so routine local use can't
-accidentally start a real ERiC-capable process), and
-`.github/workflows/ci.yml` (backend `pytest` + frontend `lint` on every
-push/PR). Provisioning a real host, domain, TLS, and live Stripe/S3
-credentials for production remains open.
+**The full stack is deployed and live** at meinetaxengine.de on Railway:
+the FastAPI backend, the Next.js frontend, and the `eric-submitter`
+worker (its own Railway service, with its own Dockerfile that bakes in
+the real Linux ERiC SDK — fetched from a real S3 bucket at container
+startup rather than baked into a git-tracked build context, since
+`railway up` only uploads git-tracked files and the licensed SDK is
+gitignored) are all running as real Railway services, backed by real S3
+object storage and a live Stripe key. Both `EricInitialisiere()` and
+`EricCheckXML()` have been validated end-to-end inside the worker's real
+deployed container against the real Linux ERiC library. `docker-compose.yml`
+and `.github/workflows/ci.yml` (backend `pytest` + frontend `lint`) round
+out local smoke-testing and CI. Two production-only bugs surfaced and
+were fixed this way: `<PaymentElement>` silently never mounting, traced to
+a single mistyped character in the live Stripe publishable key on
+Railway; and homepage edits not appearing after deploy, traced to
+Railway's edge cache not purging on deploy the way Vercel's does (fixed
+with `export const dynamic = "force-dynamic"`). No real submission has
+yet reached a Finanzamt through this deployment — that first attempt is
+being treated deliberately carefully (a small, low-stakes filing,
+reviewed XML, someone watching the worker's logs), not as a routine
+deploy.
 
 Frontend (`frontend/`) covers wage, capital-gains, rental, and
 self-employment income forms, deductions, calculate, the refund
