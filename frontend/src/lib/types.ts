@@ -187,6 +187,14 @@ export interface RentalPropertyStatement {
   deductible_expenses_cents: number;
   building_acquisition_cost_cents: number | null;
   building_completion_year: number | null;
+  // Derived by the backend from the two fields above -- never recompute
+  // these client-side. `deductible_expenses_cents` alone EXCLUDES AfA, so
+  // subtracting it from gross yields a net figure the backend's own
+  // calculation disagrees with (and the §7 Abs. 4 rate table lives in
+  // tax_engine/constants.py, not here).
+  afa_deduction_cents: number;
+  total_deductible_expenses_cents: number;
+  net_rental_income_cents: number;
   created_at: string;
 }
 

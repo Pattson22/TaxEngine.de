@@ -6,19 +6,44 @@ import type {
   SelectHTMLAttributes,
 } from "react";
 
+/** Every visual choice lives in a `variant`/`size` here, deliberately --
+ * NOT in a `className` the caller tacks on. Conflicting Tailwind utilities
+ * resolve by stylesheet order, not by their order in the class attribute,
+ * so a passed-in `bg-brass` does NOT reliably beat a variant's `bg-ink`:
+ * it silently loses and the caller gets the variant's colour with no error
+ * anywhere. That exact bug shipped -- the landing page's primary CTA
+ * passed `bg-brass text-ink` and rendered `bg-ink` on the `bg-ink` hero,
+ * i.e. an invisible button on the highest-traffic page in the product.
+ * Hence the `hero` variant below rather than a colour override, and a
+ * `size` prop rather than a padding override (padding is out of `base`
+ * for the same reason -- it would conflict too). `className` is for
+ * LAYOUT only: margins, width. Never colour, never padding. */
 export function Button({
   variant = "primary",
+  size = "md",
   className = "",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "danger" }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "primary" | "secondary" | "danger" | "hero";
+  size?: "md" | "lg";
+}) {
   const base =
-    "inline-flex items-center justify-center gap-2 rounded-sm px-5 py-2.5 text-sm font-medium tracking-wide transition-colors disabled:cursor-not-allowed disabled:opacity-40";
+    "inline-flex items-center justify-center gap-2 rounded-sm text-sm font-medium tracking-wide transition-colors disabled:cursor-not-allowed disabled:opacity-40";
+  const sizes: Record<string, string> = {
+    md: "px-5 py-2.5",
+    lg: "px-6 py-3",
+  };
   const variants: Record<string, string> = {
     primary: "bg-ink text-paper hover:bg-brass hover:text-ink",
     secondary: "border border-ink/15 bg-transparent text-ink hover:border-ink/40",
     danger: "border border-clay/30 bg-clay-soft text-clay hover:border-clay/60",
+    // For placement ON the dark ink hero, where `primary` would be
+    // invisible: brass on ink, inverted from primary's ink on paper.
+    hero: "bg-brass text-ink hover:bg-brass-soft",
   };
-  return <button className={`${base} ${variants[variant]} ${className}`} {...props} />;
+  return (
+    <button className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} {...props} />
+  );
 }
 
 export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {

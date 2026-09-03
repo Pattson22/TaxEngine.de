@@ -115,6 +115,22 @@ def rental_total_deductible_expenses_cents(statement: RentalPropertyStatement) -
     return statement.deductible_expenses_cents
 
 
+def rental_net_income_cents(statement: RentalPropertyStatement) -> int:
+    """One rental property's §21 EStG net result -- gross rent minus the
+    COMPLETE Werbungskosten figure above, so any derived AfA is included.
+
+    Signed on purpose: a loss here legitimately offsets other income
+    (§2 Abs. 3 EStG) and must never be floored at zero. Exposed so the API
+    can report the same per-property figure the calculation pipeline uses,
+    rather than have each client re-derive it -- a client doing its own
+    `gross - deductible_expenses_cents` silently omits AfA and shows the
+    filer a number this project disagrees with.
+    """
+    return calculate_rental_income(
+        statement.gross_rental_income_cents, rental_total_deductible_expenses_cents(statement)
+    )
+
+
 # Werbungskosten (§9 EStG, reduce taxable income) vs. Sonderausgaben
 # (§10 EStG, their own separate Pauschbetrag) vs. tax CREDITS (§35a EStG,
 # subtracted from the final liability, not from taxable income) — see
@@ -238,11 +254,7 @@ def calculate_tax_filing(db: Session, user: User, tax_year: int) -> TaxFiling:
     # than summing gross income and expenses separately -- a loss on one
     # property and a gain on another correctly net against each other here,
     # matching how §21 EStG income is assessed per taxpayer, not per property.
-    net_rental_income_cents = 0
-    for s in rental_statements:
-        net_rental_income_cents += calculate_rental_income(
-            s.gross_rental_income_cents, rental_total_deductible_expenses_cents(s)
-        )
+    net_rental_income_cents = sum(rental_net_income_cents(s) for s in rental_statements)
 
     self_employment_statements = (
         db.query(SelfEmploymentStatement)

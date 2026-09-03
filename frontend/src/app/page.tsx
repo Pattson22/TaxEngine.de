@@ -42,7 +42,7 @@ export default function Home() {
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-5">
             <Link href="/register">
-              <Button className="bg-brass px-6 py-3 text-ink hover:bg-brass-soft">
+              <Button variant="hero" size="lg">
                 Start your return
               </Button>
             </Link>

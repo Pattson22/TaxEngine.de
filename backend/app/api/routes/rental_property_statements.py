@@ -10,8 +10,36 @@ from app.database import get_db
 from app.models.rental_property_statement import RentalPropertyStatement
 from app.models.user import User
 from app.schemas.rental_property_statement import RentalPropertyStatementCreate, RentalPropertyStatementRead
+from app.services.tax_calculation_service import (
+    rental_net_income_cents,
+    rental_total_deductible_expenses_cents,
+)
 
 router = APIRouter(prefix="/rental-property-statements", tags=["rental-property-statements"])
+
+
+def _to_read(statement: RentalPropertyStatement) -> RentalPropertyStatementRead:
+    """Attach the derived AfA/total/net figures to a stored row.
+
+    Every response goes through here so a client never has to subtract
+    anything itself: `deductible_expenses_cents` alone omits AfA, and a
+    client computing `gross - deductible_expenses_cents` would show the
+    filer a net figure this project's own calculation disagrees with.
+    """
+    total_expenses_cents = rental_total_deductible_expenses_cents(statement)
+    return RentalPropertyStatementRead(
+        id=statement.id,
+        tax_year=statement.tax_year,
+        property_address=statement.property_address,
+        gross_rental_income_cents=statement.gross_rental_income_cents,
+        deductible_expenses_cents=statement.deductible_expenses_cents,
+        building_acquisition_cost_cents=statement.building_acquisition_cost_cents,
+        building_completion_year=statement.building_completion_year,
+        created_at=statement.created_at,
+        afa_deduction_cents=total_expenses_cents - statement.deductible_expenses_cents,
+        total_deductible_expenses_cents=total_expenses_cents,
+        net_rental_income_cents=rental_net_income_cents(statement),
+    )
 
 
 def _get_owned_statement_or_404(
@@ -28,12 +56,12 @@ def create_rental_property_statement(
     payload: RentalPropertyStatementCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> RentalPropertyStatement:
+) -> RentalPropertyStatementRead:
     statement = RentalPropertyStatement(user_id=current_user.id, **payload.model_dump())
     db.add(statement)
     db.commit()
     db.refresh(statement)
-    return statement
+    return _to_read(statement)
 
 
 @router.get("", response_model=list[RentalPropertyStatementRead])
@@ -41,11 +69,11 @@ def list_rental_property_statements(
     tax_year: int | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[RentalPropertyStatement]:
+) -> list[RentalPropertyStatementRead]:
     query = db.query(RentalPropertyStatement).filter(RentalPropertyStatement.user_id == current_user.id)
     if tax_year is not None:
         query = query.filter(RentalPropertyStatement.tax_year == tax_year)
-    return query.order_by(RentalPropertyStatement.tax_year.desc()).all()
+    return [_to_read(s) for s in query.order_by(RentalPropertyStatement.tax_year.desc()).all()]
 
 
 @router.get("/{statement_id}", response_model=RentalPropertyStatementRead)
@@ -53,8 +81,8 @@ def get_rental_property_statement(
     statement_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> RentalPropertyStatement:
-    return _get_owned_statement_or_404(statement_id, current_user, db)
+) -> RentalPropertyStatementRead:
+    return _to_read(_get_owned_statement_or_404(statement_id, current_user, db))
 
 
 @router.delete("/{statement_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)

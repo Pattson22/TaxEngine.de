@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -356,18 +356,32 @@ export default function FilingDetailPage() {
             <p className="text-sm text-ink/45">Vermietung und Verpachtung (Anlage V).</p>
           ) : (
             <Ledger>
-              {rentalIncome.map((r, i) => {
-                const netCents = r.gross_rental_income_cents - r.deductible_expenses_cents;
-                return (
+              {rentalIncome.map((r, i) => (
+                // net_rental_income_cents comes from the backend: it already
+                // nets off any computed AfA, which deductible_expenses_cents
+                // alone does not. Subtracting here would show a figure the
+                // refund calculation disagrees with.
+                <Fragment key={r.id}>
                   <LedgerLine
-                    key={r.id}
                     label={r.property_address}
-                    value={formatCents(netCents)}
-                    tone={netCents >= 0 ? "positive" : "negative"}
+                    value={formatCents(r.net_rental_income_cents)}
+                    tone={r.net_rental_income_cents >= 0 ? "positive" : "negative"}
                     delay={i * 60}
                   />
-                );
-              })}
+                  {/* The rental form promises "we compute AfA for you" once
+                      both building fields are filled in -- so show what that
+                      actually came to, rather than folding it invisibly into
+                      the net figure above. */}
+                  {r.afa_deduction_cents > 0 && (
+                    <LedgerLine
+                      label="— incl. AfA (§7 Abs. 4 EStG)"
+                      value={formatCents(r.afa_deduction_cents)}
+                      tone="negative"
+                      delay={i * 60 + 30}
+                    />
+                  )}
+                </Fragment>
+              ))}
             </Ledger>
           )}
         </BentoTile>
