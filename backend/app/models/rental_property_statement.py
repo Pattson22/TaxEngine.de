@@ -65,7 +65,11 @@ class RentalPropertyStatement(Base):
     # default), deductible_expenses_cents is treated as the complete
     # Werbungskosten figure, matching this project's original behavior
     # where any AfA had to be pre-computed and folded in manually --
-    # see tax_calculation_service.py for exactly how the two paths differ.
+    # see tax_calculation_service.rental_total_deductible_expenses_cents()
+    # for exactly how the two paths differ. That helper is the ONE place
+    # the rule lives: both the calculation pipeline and the Anlage V
+    # serializer (app/eric/xml_builder.py) read the total through it, so
+    # the refund estimate and the submitted return can never diverge.
     building_acquisition_cost_cents: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     building_completion_year: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 

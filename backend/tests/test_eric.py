@@ -38,6 +38,7 @@ from app.models.enums import (
     TaxClass,
 )
 from app.models.rental_property_statement import RentalPropertyStatement
+from app.services.tax_calculation_service import rental_total_deductible_expenses_cents
 from app.models.self_employment_statement import SelfEmploymentStatement
 from app.models.tax_filing import TaxFiling
 from app.models.user import User
@@ -502,6 +503,70 @@ class TestXmlBuilder:
         assert "<E0705607>1550</E0705607>" in xml  # first property's expenses, whole euros
         assert "<E0700206>2000</E0700206>" in xml
         assert "<E0705607>500</E0705607>" in xml
+
+    def test_rental_expenses_include_derived_afa(self):
+        """The submitted Anlage V must declare the SAME Werbungskosten the
+        refund estimate was computed from -- entered expenses PLUS derived
+        §7 Abs. 4 AfA. Serializing only the stored column understates the
+        declared figure, so the assessment comes back below the estimate."""
+        stmt = RentalPropertyStatement(
+            property_address="Musterstraße 1, Berlin",
+            gross_rental_income_cents=1_200_000,
+            deductible_expenses_cents=300_000,
+            building_acquisition_cost_cents=20_000_000,  # 200k euro building
+            building_completion_year=2010,  # 2% linear rate -> 4_000_00 cents
+        )
+
+        xml = build_est_xml(
+            _make_user(), _make_filing(), [], rental_property_statements=[stmt], hersteller_id="12345"
+        )
+
+        # 3000 EUR entered + 4000 EUR AfA, not the 3000 alone.
+        assert "<E0705607>7000</E0705607>" in xml
+        assert "<E0705607>3000</E0705607>" not in xml
+
+    def test_rental_expenses_omit_afa_without_both_structured_inputs(self):
+        """With either structured field NULL the entered expenses are the
+        complete figure -- matching the calculation pipeline exactly."""
+        stmt = RentalPropertyStatement(
+            property_address="Musterstraße 1, Berlin",
+            gross_rental_income_cents=1_200_000,
+            deductible_expenses_cents=300_000,
+            building_acquisition_cost_cents=20_000_000,
+            building_completion_year=None,
+        )
+
+        xml = build_est_xml(
+            _make_user(), _make_filing(), [], rental_property_statements=[stmt], hersteller_id="12345"
+        )
+
+        assert "<E0705607>3000</E0705607>" in xml
+
+    def test_rental_declared_expenses_match_the_calculation_pipeline(self):
+        """Lock the two paths to one helper: whatever the engine deducts is
+        exactly what the return declares, for every AfA input shape."""
+        for acquisition_cents, completion_year in [
+            (None, None),
+            (None, 2010),
+            (20_000_000, None),
+            (20_000_000, 2010),
+            (33_000_000, 2024),  # 3% rate band
+            (15_000_000, 1912),  # 2.5% rate band
+        ]:
+            stmt = RentalPropertyStatement(
+                property_address="Musterstraße 1, Berlin",
+                gross_rental_income_cents=1_200_000,
+                deductible_expenses_cents=300_000,
+                building_acquisition_cost_cents=acquisition_cents,
+                building_completion_year=completion_year,
+            )
+
+            xml = build_est_xml(
+                _make_user(), _make_filing(), [], rental_property_statements=[stmt], hersteller_id="12345"
+            )
+
+            expected_euros = rental_total_deductible_expenses_cents(stmt) // 100
+            assert f"<E0705607>{expected_euros}</E0705607>" in xml, (acquisition_cents, completion_year)
 
     def test_self_employment_maps_business_name_and_net_profit(self):
         stmt = SelfEmploymentStatement(

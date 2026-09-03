@@ -46,11 +46,17 @@ of a real field identifier, cross-checked against the schema's own
   cardinality, via `Laufende_Nummer_V`), with the property's address
   (`Allg/Lage/E0700407`), total rent (`Einn/Mieteinn/Whg/Sum/E0700206`),
   and total deductible costs filed under the schema's generic "Sonstige
-  Werbungskosten" bucket (`Wk/Sonst/Sum/E0705607`) -- NOT under a specific
-  category like AfA depreciation or mortgage interest, since
-  `rental_income.py`'s own docstring already states this project doesn't
-  compute an AfA schedule, and claiming one of the specific boxes would
-  misrepresent an expense type this project never actually determined.
+  Werbungskosten" bucket (`Wk/Sonst/Sum/E0705607`) -- NOT split across
+  specific categories like AfA depreciation or mortgage interest. That
+  total is `tax_calculation_service.rental_total_deductible_expenses_cents()`,
+  the SAME helper the calculation pipeline uses, so the figure declared
+  here always matches the one the refund estimate was computed from --
+  including the derived §7 Abs. 4 AfA when the statement carries the
+  structured inputs for it. The generic bucket is still the honest
+  destination even now that AfA is computed: only part of the total is
+  ever attributable to depreciation, and the remainder is an unclassified
+  lump the filer entered, so itemizing it into specific schema boxes would
+  claim a breakdown this project never actually determined.
 - `Kind` (Anlage Kind): one `<Kind>` block per `app.models.child.Child`
   row (a separate table from `filing.number_of_children` -- see that
   model's own docstring for why the two are deliberately independent),
@@ -146,6 +152,7 @@ from app.models.tax_filing import TaxFiling
 from app.models.user import User
 from app.models.wage_tax_certificate import WageTaxCertificate
 from app.schemas.deduction import DonationDetails
+from app.services.tax_calculation_service import rental_total_deductible_expenses_cents
 
 _ELSTER_NAMESPACE = "http://www.elster.de/elsterxml/schema/v11"
 _HEADER_VERSION = "11"
@@ -577,12 +584,15 @@ def build_est_xml(
         )  # Summe Mieteinnahmen
 
         wk = ET.SubElement(v, "Wk")
-        # Filed under the schema's generic "Sonstiges" bucket, not a
-        # specific category like AfA/Schuldzinsen -- see this module's
-        # docstring for why claiming a specific one would be dishonest.
+        # The COMPLETE Werbungskosten figure -- entered expenses plus any
+        # derived §7 Abs. 4 AfA -- via the same helper the calculation
+        # pipeline uses, so the submitted return can never declare less
+        # than the refund estimate was computed from. Filed under the
+        # schema's generic "Sonstiges" bucket rather than split across
+        # specific boxes; see this module's docstring for why.
         sonst_sum = ET.SubElement(ET.SubElement(wk, "Sonst"), "Sum")
         ET.SubElement(sonst_sum, "E0705607").text = _cents_to_whole_euro_str(
-            stmt.deductible_expenses_cents
+            rental_total_deductible_expenses_cents(stmt)
         )  # Abzugsfähige Werbungskosten
 
     # Vorsatz is last in the real E10 element order (after V/V_FeWo/

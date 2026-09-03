@@ -81,6 +81,40 @@ def get_supported_tax_years() -> list[int]:
     return sorted(SUPPORTED_TAX_YEARS)
 
 
+def rental_total_deductible_expenses_cents(statement: RentalPropertyStatement) -> int:
+    """One rental property's COMPLETE §9 EStG Werbungskosten figure: the
+    filer's own entered expenses plus, when the structured AfA inputs are
+    present, the §7 Abs. 4 EStG building depreciation derived from them.
+
+    Shared deliberately by the calculation pipeline (calculate_tax_filing
+    below) and by the Anlage V serializer (app/eric/xml_builder.py), which
+    must agree exactly: an AfA amount that raises the refund ESTIMATE but
+    is missing from the SUBMITTED return would understate the declared
+    Werbungskosten, and the assessment would come back lower than the
+    estimate promised. That is a real bug this function exists to make
+    structurally impossible, so neither caller should re-derive AfA itself.
+
+    AfA is derived on demand rather than persisted onto
+    `deductible_expenses_cents`, which is the filer's own input: writing a
+    computed value back into an input column would both conflate the two
+    and double-count on every recalculation. This matches the project-wide
+    rule that computed deductions are recomputed from structured inputs
+    rather than trusted as stored totals.
+    """
+    # BOTH structured fields are required (see RentalPropertyStatement's
+    # own docstring) -- with either NULL, the entered expenses are trusted
+    # as the complete figure, matching this project's pre-AfA behavior
+    # where any depreciation had to be folded in by hand.
+    if (
+        statement.building_acquisition_cost_cents is not None
+        and statement.building_completion_year is not None
+    ):
+        return statement.deductible_expenses_cents + calculate_afa_deduction(
+            statement.building_acquisition_cost_cents, statement.building_completion_year
+        )
+    return statement.deductible_expenses_cents
+
+
 # Werbungskosten (§9 EStG, reduce taxable income) vs. Sonderausgaben
 # (§10 EStG, their own separate Pauschbetrag) vs. tax CREDITS (§35a EStG,
 # subtracted from the final liability, not from taxable income) — see
@@ -206,17 +240,8 @@ def calculate_tax_filing(db: Session, user: User, tax_year: int) -> TaxFiling:
     # matching how §21 EStG income is assessed per taxpayer, not per property.
     net_rental_income_cents = 0
     for s in rental_statements:
-        deductible_expenses_cents = s.deductible_expenses_cents
-        # AfA is only added automatically when BOTH structured fields are
-        # present (see RentalPropertyStatement's docstring) -- otherwise
-        # deductible_expenses_cents is trusted as the complete figure,
-        # exactly matching this project's original pre-AfA behavior.
-        if s.building_acquisition_cost_cents is not None and s.building_completion_year is not None:
-            deductible_expenses_cents += calculate_afa_deduction(
-                s.building_acquisition_cost_cents, s.building_completion_year
-            )
         net_rental_income_cents += calculate_rental_income(
-            s.gross_rental_income_cents, deductible_expenses_cents
+            s.gross_rental_income_cents, rental_total_deductible_expenses_cents(s)
         )
 
     self_employment_statements = (
