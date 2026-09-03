@@ -10,6 +10,8 @@ the Steuerberatungsgesetz software safe-harbor.
 
 ```
 TaxEngine.de/
+├── .github/workflows/ci.yml        CI: backend pytest + frontend lint on every push/PR
+├── docker-compose.yml               Local prod-like smoke stack (worker behind a `worker` profile)
 ├── db/
 │   └── schema.sql                  HISTORICAL reference snapshot (superseded
 │                                    by alembic/ below — see its header comment)
@@ -17,20 +19,23 @@ TaxEngine.de/
 │   ├── ELSTER_ERIC_INTEGRATION.md  Government submission architecture + implementation status
 │   └── TAXFIX_GAP_ANALYSIS.md      Competitive gap analysis + roadmap
 ├── frontend/                        Next.js + TypeScript + Tailwind (see frontend/README.md)
+│   ├── Dockerfile                    Next.js standalone build
 │   └── src/
 │       ├── lib/                      Typed API client, auth context, money formatting
 │       ├── components/               Shared UI (Button/Input/Card/Nav/...)
-│       └── app/                      Landing, auth, dashboard, filings/[id]/* (income,
-│                                     deductions, calculate, pay, submit)
+│       └── app/                      Landing, auth, dashboard, filings/[id]/* (wage/capital/
+│                                     rental/self-employment income, deductions, pay, submit)
 └── backend/
     ├── requirements.txt
     ├── pytest.ini
     ├── alembic.ini
+    ├── Dockerfile                    Serves both the FastAPI process and, via a different
+    │                                 `command:`, the eric-submitter worker
     ├── alembic/                     Migrations -- authoritative schema source
     │   ├── env.py                   Wired to app.config.settings + app.models.Base
     │   └── versions/                One migration per schema change, in order
     ├── .env.example                 Copy to .env for local development
-    ├── tests/                       215 unit tests, 100% line coverage of tax_engine
+    ├── tests/                       367 unit tests, 100% line coverage of tax_engine
     └── app/
         ├── main.py                  FastAPI app entrypoint (uvicorn app.main:app)
         ├── config.py                 Settings (env-driven, see .env.example)
@@ -51,13 +56,13 @@ TaxEngine.de/
         ├── services/
         │   ├── tax_calculation_service.py   Bridges DB rows <-> tax_engine
         │   └── payment_service.py           Stripe PaymentIntent + webhook verification
-        ├── eric/                     ELSTER/ERiC submission scaffold (see docs/ELSTER_ERIC_INTEGRATION.md)
+        ├── eric/                     ELSTER/ERiC submission (see docs/ELSTER_ERIC_INTEGRATION.md)
         │   ├── xml_builder.py         Domain model -> real E10 schema XML, verified against real ERiC
         │   ├── native_bindings.py     cffi bindings to the real ericapi.dll/.so
         │   ├── client.py              EricClient abstraction: StubEricClient + NativeEricClient (both real)
         │   └── submission_service.py  Validate -> submit -> persist orchestration (+ enqueue_submission)
-        ├── eric_submitter/           SEPARATE process/package -- the only place NativeEricClient
-        │   └── worker.py              may actually be instantiated (never inside the FastAPI app)
+        ├── eric_submitter/           SEPARATE process -- the only place NativeEricClient is ever
+        │   └── worker.py              instantiated; claims queued jobs and submits for real
         ├── api/routes/               auth, users, wage-tax-certificates,
         │                             capital-income-statements, rental-property-statements,
         │                             self-employment-statements, children, deductions,
@@ -150,7 +155,8 @@ is handled explicitly in the migration file itself.
 | `POST /tax-filings/{id}/calculate` | Runs the full `tax_engine` pipeline, persists the refund breakdown |
 | `POST /tax-filings/{id}/payment-intent` | Creates a Stripe PaymentIntent for the flat fee |
 | `POST /webhooks/stripe` | Stripe webhook (signature-verified, no JWT) — marks the fee paid |
-| `POST /tax-filings/{id}/submit` | Submits to ELSTER via the ERiC scaffold (`StubEricClient` by default — `NativeEricClient` is real and verified against the actual ERiC library but not yet wired into this route, see `docs/ELSTER_ERIC_INTEGRATION.md`) |
+| `POST /tax-filings/{id}/submit` | Queues a FEE_PAID filing (`202`, returns the `EricSubmissionJob`) for the separate `eric-submitter` worker, which claims it and submits via the real `NativeEricClient` — see `docs/ELSTER_ERIC_INTEGRATION.md` |
+| `GET /tax-filings/{id}/submission-job`, `GET .../submission-jobs` | Poll the latest submission job's status, or fetch the full history (original + amendments) |
 
 `POST /tax-filings/{id}/calculate` is the integration point worth reading
 first: `app/services/tax_calculation_service.py` loads a user's wage
@@ -200,8 +206,10 @@ These are non-negotiable across the codebase:
   --autogenerate` produces an accurate diff.
 - **Payment and government-submission trust boundaries are explicit**:
   `/webhooks/stripe` authenticates via Stripe's own signature, never JWT;
-  `NativeEricClient` fails loudly with `NotImplementedError` rather than
-  silently pretending to submit to a real Finanzamt.
+  `NativeEricClient` is only ever instantiated inside the separate
+  `eric-submitter` worker process, never inside the FastAPI web process,
+  and that worker is pointed at its own dedicated database so a
+  routine-testing row can never be submitted to a real Finanzamt.
 - **The §32a bracket calculation and the Kirchensteuer Kappung rate table
   are explicitly-labeled approximations** — see their module docstrings
   for exactly what's simplified and why. The only value transmitted to
@@ -210,7 +218,7 @@ These are non-negotiable across the codebase:
 
 ## Verification
 
-- `backend/tests/` — 215 pytest unit tests, 100% line coverage of
+- `backend/tests/` — 367 pytest unit tests, 100% line coverage of
   `tax_engine`, run with `python -m pytest`.
 - Every feature above was additionally smoke-tested end-to-end against a
   real, throwaway Dockerized Postgres instance through the actual HTTP
@@ -236,26 +244,54 @@ actual proprietary DLL, including a real `EricCheckXML()` pass for a
 filing combining wage, capital, rental, self-employment, and children's
 income, donations, church tax paid, and a real Vorsatz cover-sheet block
 (Steuernummer converted via the real `EricMakeElsterStnr()`) all
-together. `xml_builder.py`'s payload is now mapped to the real E10 schema
-for every income type, deduction, and cover-sheet field this project's
-data model supports (children are now first-class `app/models/child.py`
-entities, not a plain count; church tax paid directly is a new
-`DeductionCategory`; each filer's Finanzamt is now collected via
+together. `xml_builder.py`'s payload is mapped to the real E10 schema for
+every income type, deduction, and cover-sheet field this project's data
+model supports (children are first-class `app/models/child.py` entities,
+not a plain count; church tax paid directly is its own
+`DeductionCategory`; each filer's Finanzamt is collected via
 `User.finanzamt_bufa_nummer` and wired through automatically); see
-`docs/ELSTER_ERIC_INTEGRATION.md` for exactly what's mapped; a real (if
-not production-hardened) `eric-submitter` worker process now exists
-(`app/eric_submitter/worker.py`) too, though not wired into any route
-yet. The Manufacturer ID (`HerstellerID`) application has been submitted
-via the real ELSTER portal and is pending Bayerisches Landesamt für
-Steuern approval — the last step before a real submission is possible.
+`docs/ELSTER_ERIC_INTEGRATION.md` for exactly what's mapped.
 
-Frontend (`frontend/`) covers the golden path — register, dashboard, add
-wage income, add a deduction, calculate, view the refund breakdown, pay via
-Stripe Elements, submit — but is not a guided interview-style flow, and has
-no form for capital gains/rental/self-employment income or the
-Kinderfreibetrag inputs (those backend routes exist and work, just
-unreached from the UI yet). The register → calculate → view-results path
-was click-tested in a real browser, not just built; see
+**Real ELSTER submission is now live end-to-end.** The Manufacturer ID
+(`HerstellerID`) application was approved — `04505`, bound to the product
+name "TaxEngine.de" — and is wired through `app/config.py` into every
+`TransferHeader` `xml_builder.py` builds. `ERIC_SDK_PATH` is set and
+verified: `NativeEricClient` loads the real Windows x86_64 `ericapi.dll`
+and `EricInitialisiere()`/`EricBeende()` both succeed. `POST
+/tax-filings/{id}/submit` queues a `FEE_PAID` filing as an
+`EricSubmissionJob` (`202 Accepted`); the separate `eric-submitter`
+worker process (`app/eric_submitter/worker.py`, run via `python -m
+app.eric_submitter.worker` or the `worker` Compose profile) polls,
+claims, and submits it for real via `NativeEricClient` — the only place
+that client is ever instantiated, deliberately kept out of the FastAPI
+web process. The frontend polls `GET /{id}/submission-job` every 3s and
+shows a full submission history (original + amendments) once resolved.
+Amended returns (Berichtigte Steuererklärung) are supported by recomputing
+the same `TaxFiling` row and re-enqueuing, since income/deduction rows are
+keyed to `(user_id, tax_year)`, not to a specific filing. The worker is
+deliberately pointed at its own dedicated database (`taxengine_live`, kept
+strictly separate from the DB used for routine dev/browser testing) so a
+leftover test row can never be submitted to a real Finanzamt.
+
+Real deployment infrastructure exists: `backend/Dockerfile` (same image
+serves the FastAPI process and, via a different `command:`, the
+`eric-submitter` worker — neither bakes in the ERiC SDK, which is
+bind-mounted via `ERIC_SDK_PATH` at container runtime),
+`frontend/Dockerfile` (Next.js standalone build), `docker-compose.yml`
+(worker behind a `worker` Compose profile so routine local use can't
+accidentally start a real ERiC-capable process), and
+`.github/workflows/ci.yml` (backend `pytest` + frontend `lint` on every
+push/PR). Provisioning a real host, domain, TLS, and live Stripe/S3
+credentials for production remains open.
+
+Frontend (`frontend/`) covers wage, capital-gains, rental, and
+self-employment income forms, deductions, calculate, the refund
+breakdown, pay via Stripe Elements, submit, and submission-history
+polling — but is not a guided interview-style flow. There is no frontend
+form yet for the `/children` CRUD API (the backend route, Kinderfreibetrag
+identity data model, and Anlage Kind XML mapping all exist and work,
+just unreached from the UI). The register → calculate → view-results
+path was click-tested in a real browser, not just built; see
 `frontend/README.md` for exactly what that run covered and the real bug
 (an unhandled Stripe error losing its CORS headers) it caught and fixed.
 
@@ -263,14 +299,8 @@ Not yet implemented: capital-gains Günstigerprüfung (§32d Abs. 6 EStG
 election to use the progressive tariff instead of Abgeltungsteuer),
 partial-year Kinderfreibetrag eligibility and the non-custodial-parent
 half-transfer (the Günstigerprüfung *calculation* still treats children
-as a plain count — see `kinderfreibetrag.py`'s docstring; children ARE
-first-class `app/models/child.py` entities now, with a real `/children`
-CRUD API and a real Anlage Kind mapping in `xml_builder.py`, but there's
-no frontend form for them yet), AfA depreciation schedules for rental income,
-Gewerbesteuer for self-employment, a registered ELSTER `HerstellerID`
-(the one remaining blocker before `NativeEricClient` can be pointed at a
-real submission — see `docs/ELSTER_ERIC_INTEGRATION.md`; per-filer
-Finanzamt routing is now collected via `User.finanzamt_bufa_nummer`),
-frontend forms for the remaining income types (including a `/children`
-form and a church-tax-paid/donations deductions form), and automated
-frontend tests.
+as a plain count — see `kinderfreibetrag.py`'s docstring), AfA
+depreciation schedules for rental income, Gewerbesteuer for
+self-employment, a frontend form for children, Einspruch (formal
+objection to an assessment — depends on Bescheiddatenabruf, which doesn't
+exist), and automated frontend tests.
