@@ -41,7 +41,7 @@ corrected here.) Sources: [Taxfix — costs at a glance](https://taxfix.de/en/co
 
 ## What closed the gap
 
-Everything marked ✅ above is real, tested code — `backend/tests/` (367
+Everything marked ✅ above is real, tested code — `backend/tests/` (373
 unit tests, 100% `tax_engine` coverage) plus live end-to-end smoke tests
 against a real Dockerized Postgres for every feature, not just design
 notes. A few highlights:

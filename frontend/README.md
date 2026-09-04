@@ -27,8 +27,26 @@ the refund breakdown → confirm withdrawal consent (AGB § 5) and pay via
 Stripe Elements → submit to the Finanzamt (async, worker-backed — the page
 polls job status and shows submission history, including amendments).
 Impressum, Datenschutzerklärung, AGB, and an ELSTER-specific privacy
-notice/consent checkbox round out the legally required pages. This is
-running live at meinetaxengine.de on Railway.
+notice/consent checkbox round out the legally required pages — the
+operator identity in `lib/legal-info.ts` is now real rather than
+placeholders, though the pages still carry a notice that no lawyer has
+reviewed them. This is running live at meinetaxengine.de on Railway, in
+the EU West region (Amsterdam); `legal-info.ts` records the hosting
+location the Datenschutzerklärung renders.
+
+Two behaviours worth knowing before changing this code:
+
+- **The filing hub recalculates on load**, so the refund figure is
+  current without the filer pressing anything. It is gated to DRAFT and
+  CALCULATED (`AUTO_RECALCULABLE_STATUSES`) as a correctness guard, not
+  caution: the backend sets status back to CALCULATED unconditionally, so
+  auto-running it on a FEE_PAID filing would discard the paid-fee record,
+  and on a SUBMITTED one it would start an amendment.
+- **Never re-derive money client-side.** The hub renders
+  `net_rental_income_cents` straight from the API rather than subtracting
+  expenses itself, because the stored `deductible_expenses_cents` excludes
+  computed AfA — doing the arithmetic here once produced a figure the
+  backend's own calculation disagreed with.
 
 ```
 src/
@@ -140,6 +158,31 @@ look (no cream+serif, no near-black+neon, no newspaper hairlines):
   generating these from the backend's OpenAPI schema (e.g.
   `openapi-typescript`) would remove the risk of the two drifting apart
   silently.
+- **UI chrome is English; German is reserved for real German terms.**
+  The app is `lang="en"` and aimed at expats, so labels, statuses and
+  category tabs are English; Anlage names, Werbungskosten, `§32a EStG`
+  and the legally German Impressum/Datenschutz/AGB pages stay German. The
+  rule is written next to `CATEGORY_TAB` in `components/ui.tsx`, because
+  the two drifted apart once already ("Kapital" rendering beside its own
+  English heading).
+- **`Button` takes `variant`/`size`, never colour or padding via
+  `className`.** Conflicting Tailwind utilities resolve by stylesheet
+  order, not attribute order, so a passed-in `bg-brass` does NOT reliably
+  beat the variant's `bg-ink` — it silently loses. That shipped: the
+  landing page's primary CTA rendered `bg-ink` on the `bg-ink` hero, an
+  invisible button on the highest-traffic page. Hence the `hero` variant
+  and the `size` prop, with padding kept out of `base` so it cannot
+  conflict either. `className` is for layout only.
+- **Screen-reader announcements are deliberate, not incidental.**
+  `RefundAnchor` is an `aria-live` region with `aria-atomic` (the digits
+  animate, so without it each frame would be read), the polled submission
+  status is `aria-live`, `ErrorBanner` is `role="alert"`, and the async
+  buttons carry `aria-busy`.
+- **`LedgerLine` truncates the label, never the amount.** The label gets
+  `min-w-0 truncate` plus `title`; the figure keeps `shrink-0` and
+  `nowrap`. A half-shown number in a money column is worse than useless,
+  and a realistic property address overflowed the row at phone width
+  before this.
 - **No automated frontend tests yet** (no Jest/Playwright/Vitest set up).
   Verification performed instead: `npm run build` (clean), `npm run lint`
   (clean), `tsc --noEmit` (clean), plus real click-throughs in an actual

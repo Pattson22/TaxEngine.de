@@ -35,7 +35,7 @@ TaxEngine.de/
     │   ├── env.py                   Wired to app.config.settings + app.models.Base
     │   └── versions/                One migration per schema change, in order
     ├── .env.example                 Copy to .env for local development
-    ├── tests/                       367 unit tests, 100% line coverage of tax_engine
+    ├── tests/                       373 unit tests, 100% line coverage of tax_engine
     └── app/
         ├── main.py                  FastAPI app entrypoint (uvicorn app.main:app)
         ├── config.py                 Settings (env-driven, see .env.example)
@@ -150,7 +150,7 @@ is handled explicitly in the migration file itself.
 | `GET /users/me`, `PATCH /users/me` | Profile (tax class, church tax, joint assessment, Steuer-ID, ...) |
 | `POST/GET /wage-tax-certificates`, `GET/DELETE .../{id}` | Lohnsteuerbescheinigung data |
 | `POST/GET /capital-income-statements`, `GET/DELETE .../{id}` | Kapitalerträge (Anlage KAP) |
-| `POST/GET /rental-property-statements`, `GET/DELETE .../{id}` | Vermietung und Verpachtung (Anlage V) |
+| `POST/GET /rental-property-statements`, `GET/DELETE .../{id}` | Vermietung und Verpachtung (Anlage V). Every response also carries `afa_deduction_cents`, `total_deductible_expenses_cents` and `net_rental_income_cents`, derived server-side so no client re-implements the §7 Abs. 4 rate table |
 | `POST/GET /self-employment-statements`, `GET/DELETE .../{id}` | Simplified EÜR (Anlage S) |
 | `POST/GET /children`, `GET/DELETE .../{id}` | First-class Kinderfreibetrag child records (Anlage Kind identity data) |
 | `POST/GET /deductions`, `GET/DELETE .../{id}` | Werbungskosten/Sonderausgaben/credit line items |
@@ -221,7 +221,7 @@ These are non-negotiable across the codebase:
 
 ## Verification
 
-- `backend/tests/` — 367 pytest unit tests, 100% line coverage of
+- `backend/tests/` — 373 pytest unit tests, 100% line coverage of
   `tax_engine`, run with `python -m pytest`.
 - Every feature above was additionally smoke-tested end-to-end against a
   real, throwaway Dockerized Postgres instance through the actual HTTP
@@ -292,10 +292,19 @@ fix and is not built.
 the FastAPI backend, the Next.js frontend, and the `eric-submitter`
 worker (its own Railway service, built from `backend/Dockerfile.worker`)
 are all running as real Railway services, backed by real S3 object
-storage and a live Stripe key. That worker image deliberately does *not*
-bake in the licensed ERiC SDK: `railway up` only uploads git-tracked
-files and the SDK is gitignored, so the image fetches it from S3 at
-container startup instead (`app/eric_submitter/fetch_sdk.py`). Both `EricInitialisiere()` and
+storage and a live Stripe key. **All four services (including Postgres)
+run in Railway's EU West region** (Amsterdam, `europe-west4-drams3a`),
+moved there from the US so that compute, database and document storage
+are all inside the EU -- `frontend/src/lib/legal-info.ts` and the
+Datenschutzerklärung state this, and the move is why they can. Note that
+`railway scale <region>=1` ADDS a replica rather than moving one: both
+values have to go in a single command (`eu-west=1 sfo=0`), which matters
+for a volume-backed service that must never briefly run in two regions.
+
+That worker image deliberately does *not* bake in the licensed ERiC SDK:
+`railway up` only uploads git-tracked files and the SDK is gitignored, so
+the image fetches it from S3 at container startup instead
+(`app/eric_submitter/fetch_sdk.py`). Both `EricInitialisiere()` and
 `EricCheckXML()` have been validated end-to-end inside the worker's real
 deployed container against the real Linux ERiC library. `docker-compose.yml`
 and `.github/workflows/ci.yml` (backend `pytest` + frontend `lint`) round
@@ -330,6 +339,29 @@ just unreached from the UI). The register → calculate → view-results
 path was click-tested in a real browser, not just built; see
 `frontend/README.md` for exactly what that run covered and the real bug
 (an unhandled Stripe error losing its CORS headers) it caught and fixed.
+
+The refund figure keeps itself current: the filing hub recalculates on
+load, so income entered on one of the per-Anlage pages is reflected when
+the filer returns without them having to press anything. It is gated to
+DRAFT and CALCULATED filings, which is a correctness guard rather than
+caution — `calculate_tax_filing()` sets status back to CALCULATED
+unconditionally, so auto-running it on a FEE_PAID filing would discard
+the record that the fee was paid, and on a SUBMITTED one it would begin
+an amendment and clear the Transferticket.
+
+UI chrome is English throughout (the app is `lang="en"`, aimed at
+expats); German is reserved for terms that ARE the German thing being
+named — Anlage names, Werbungskosten, `§32a EStG` — and for the legally
+German Impressum/Datenschutz/AGB pages, whose operator identity is now
+filled in from real details rather than placeholders. `Button` carries
+`variant`/`size` props precisely so callers never override colour or
+padding via `className`: conflicting Tailwind utilities resolve by
+stylesheet order, not attribute order, which had silently rendered the
+landing page's primary CTA in `bg-ink` on a `bg-ink` hero — an invisible
+button on the highest-traffic page in the product. The landing page also
+carries a trust section built only from checkable facts (the ELSTER
+manufacturer ID, the fee model, the StBerG scope limit) and deliberately
+no social proof, since nothing has been filed at volume yet.
 
 ### Scoped but not built
 
