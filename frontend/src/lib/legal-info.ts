@@ -38,12 +38,25 @@ export const LEGAL_INFO = {
   supervisoryAuthority: "Berliner Beauftragte für Datenschutz und Informationsfreiheit",
   // Real, verified technical facts (Railway project configuration) --
   // unlike the placeholders above, these are not the operator's to fill
-  // in, so they're filled in here directly. hostingProvider being a
-  // US region is the reason section 9's Drittland/SCC clause in
-  // datenschutz/page.tsx is not merely hypothetical -- flagged, not
-  // silently left implicit.
+  // in, so they're filled in here directly.
+  //
+  // Hosting and the database moved from Railway's San Francisco region to
+  // EU West (Amsterdam, europe-west4-drams3a) on 2026-09-04, verified by
+  // reading each service's deployed region back afterwards; the Postgres
+  // volume was migrated with it. Compute, database and object storage are
+  // therefore all in the EU now.
+  //
+  // That does NOT make section 9's Drittland/EU-SCC sentence in
+  // datenschutz/page.tsx removable, and it was deliberately left in place:
+  // Stripe remains a US-headquartered payment processor, so a third-country
+  // transfer still occurs on that path. What changed is that hosting is no
+  // longer one of the reasons -- which is a narrowing, not an elimination,
+  // and whether the wording should change at all is a lawyer's call, not an
+  // inference from this file. Section 9 is phrased conditionally
+  // ("nur, soweit einer der genannten Anbieter dort verarbeitet"), so it
+  // stays accurate either way.
   documentStorageProvider: "Railway (Object Storage, Region: Amsterdam/EU)",
-  hostingProvider: "Railway (Region: San Francisco/USA)",
+  hostingProvider: "Railway (Region: Amsterdam/EU)",
   // See app/config.py's data_retention_years docstring (backend) for the
   // legal basis and the caveat that this figure itself still needs a
   // lawyer's confirmation, same as every placeholder above.
